@@ -90,6 +90,8 @@ async function saveSharedAgents() {
         }));
         
         // Tentative d'envoi vers votre script Google (inchangé)
+        // Dans saveSharedPlanning(), avant fetch
+alert("Exemple date envoyée : " + dataToSend[0]?.Date);
         const response = await fetch(`${APPS_SCRIPT_URL}?tab=Agents&replace=true`, {
             method: 'POST',
             headers: { 'Content-Type': 'text/plain' },
@@ -110,22 +112,29 @@ async function saveSharedAgents() {
 async function saveSharedPlanning() {
     if (!APPS_SCRIPT_URL) return;
     try {
-        const dataToSend = [];
-        for (const [monthKey, agentsData] of Object.entries(planningData)) {
-            for (const [agentCode, days] of Object.entries(agentsData)) {
-                for (const [dateStr, shiftData] of Object.entries(days)) {
-                    // Nettoyer la date : ne garder que YYYY-MM-DD
-                    let cleanDate = dateStr.split('T')[0]; // enlève tout après T
-                    dataToSend.push({
-                        AgentCode: agentCode,
-                        Date: cleanDate,
-                        Shift: shiftData.shift,
-                        Type: shiftData.type || 'theorique',
-                        Commentaire: shiftData.comment || ''
-                    });
-                }
+     const dataToSend = [];
+for (const [monthKey, agentsData] of Object.entries(planningData)) {
+    for (const [agentCode, days] of Object.entries(agentsData)) {
+        for (const [dateStr, shiftData] of Object.entries(days)) {
+            // FORCER le format YYYY-MM-DD sans timezone
+            let cleanDate = dateStr.split('T')[0];
+            if (!cleanDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
+                // Si ce n'est pas encore au bon format, le construire
+                const d = new Date(dateStr);
+                cleanDate = d.getFullYear() + '-' + 
+                           String(d.getMonth() + 1).padStart(2,'0') + '-' + 
+                           String(d.getDate()).padStart(2,'0');
             }
+            dataToSend.push({
+                AgentCode: agentCode,
+                Date: cleanDate,
+                Shift: shiftData.shift,
+                Type: shiftData.type || 'theorique',
+                Commentaire: shiftData.comment || ''
+            });
         }
+    }
+}
         
         const response = await fetch(`${APPS_SCRIPT_URL}?tab=Planning&replace=true`, {
             method: 'POST',
@@ -157,6 +166,8 @@ async function loadSharedPlanning() {
         for (const item of cloudPlanning) {
             // Normaliser la date : garder YYYY-MM-DD
             let rawDate = item.Date;
+            // Dans loadSharedPlanning(), après let rawDate = item.Date;
+alert("Date brute reçue : " + rawDate + " → nettoyée : " + cleanDate);
             let cleanDate = rawDate.split('T')[0];
             const monthKey = cleanDate.substring(0,7);
             const agentCode = item.AgentCode;
