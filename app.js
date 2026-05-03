@@ -2,7 +2,7 @@
 console.log("🚀 SGA v8.0 - Application chargée");
 
 // ==================== PARTIE 1 : CONSTANTES & CONFIGURATION ====================
-const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwzg1Y2kw0yV4kD79yTLGOp1_3AkZkZYHJEeS4p_whu5UzK5sIntEan6d0Kyw_nEdw-qA/exec";
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxEj7lQyKMgz61Ime0Fpwpd0yrzbGIE2hrgdiXoojtX2OhoKUgWw518Pl_qcri53VZaTw/exec";
 const SHEET_BEST_BASE_URL = APPS_SCRIPT_URL;
 
 const JOURS_FRANCAIS = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
@@ -107,6 +107,78 @@ async function saveSharedAgents() {
         if (typeof showSnackbar === 'function') showSnackbar("❌ Erreur de synchronisation");
     }
 }
+async function saveSharedPlanning() {
+    if (!APPS_SCRIPT_URL) return;
+    try {
+        const dataToSend = [];
+        for (const [monthKey, agentsData] of Object.entries(planningData)) {
+            for (const [agentCode, days] of Object.entries(agentsData)) {
+                for (const [dateStr, shiftData] of Object.entries(days)) {
+                    // Nettoyer la date : ne garder que YYYY-MM-DD
+                    let cleanDate = dateStr.split('T')[0]; // enlève tout après T
+                    dataToSend.push({
+                        AgentCode: agentCode,
+                        Date: cleanDate,
+                        Shift: shiftData.shift,
+                        Type: shiftData.type || 'theorique',
+                        Commentaire: shiftData.comment || ''
+                    });
+                }
+            }
+        }
+        
+        const response = await fetch(`${APPS_SCRIPT_URL}?tab=Planning&replace=true`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify(dataToSend)
+        });
+        const text = await response.text();
+        alert("Réponse du script : " + text);  // Temporaire pour voir la réponse
+        if (text === "OK") {
+            console.log("✅ Planning sauvegardé");
+            if (typeof showSnackbar === 'function') showSnackbar("✅ Planning synchronisé");
+        } else {
+            throw new Error(text);
+        }
+    } catch (err) {
+        console.error("❌ Erreur sauvegarde planning", err);
+        alert("Erreur : " + err.message);
+        if (typeof showSnackbar === 'function') showSnackbar("❌ Erreur synchronisation planning");
+    }
+}
+async function loadSharedPlanning() {
+    if (!APPS_SCRIPT_URL) return false;
+    try {
+        const response = await fetch(`${APPS_SCRIPT_URL}?tab=Planning`);
+        if (!response.ok) throw new Error("Erreur réseau");
+        const cloudPlanning = await response.json();
+        
+        const newPlanningData = {};
+        for (const item of cloudPlanning) {
+            // Normaliser la date : garder YYYY-MM-DD
+            let rawDate = item.Date;
+            let cleanDate = rawDate.split('T')[0];
+            const monthKey = cleanDate.substring(0,7);
+            const agentCode = item.AgentCode;
+            if (!newPlanningData[monthKey]) newPlanningData[monthKey] = {};
+            if (!newPlanningData[monthKey][agentCode]) newPlanningData[monthKey][agentCode] = {};
+            newPlanningData[monthKey][agentCode][cleanDate] = {
+                shift: item.Shift,
+                type: item.Type || 'theorique',
+                comment: item.Commentaire || ''
+            };
+        }
+        planningData = newPlanningData;
+        localStorage.setItem('sga_planning', JSON.stringify(planningData));
+        console.log(`✅ Planning chargé (${cloudPlanning.length} entrées) avec dates normalisées`);
+        if (typeof showSnackbar === 'function') showSnackbar(`✅ Planning synchronisé`);
+        return true;
+    } catch (erreur) {
+        console.error("❌ Erreur chargement planning", erreur);
+        return false;
+    }
+}
+
 
 async function loadSharedLeaves() {
     if (!SHEET_BEST_BASE_URL) return false;
@@ -577,6 +649,7 @@ async function saveLeaveWithJoker() {
         });
     }
     saveData();
+  await saveSharedPlanning();  
     alert(`✅ ${absenceType === 'C' ? 'Congés' : 'Absences'} enregistrés${selectedJoker ? `\n🔄 Joker ${selectedJoker.code} remplace ${agentCode}` : ' (sans remplacement)'}`);
     await saveLeaveToCloud(agentCode, dates[0], dates[dates.length-1], absenceType, comment, selectedJoker ? selectedJoker.code : null);
     displayLeavesMenu();
@@ -946,9 +1019,12 @@ function displayMainMenu() {
         <button class="menu-button quit-button" onclick="logout()">🚪 DÉCONNEXION</button></div></div>`;
 }
 
-function refreshAllData() {
+async function refreshAllData() {
     showSnackbar("🔄 Synchronisation en cours...");
-    loadSharedAgents().then(() => loadSharedLeaves()).then(() => showSnackbar("✅ Données mises à jour"));
+    await loadSharedAgents();
+    await loadSharedPlanning();
+    showSnackbar("✅ Données mises à jour");
+    window.location.reload(); // Recharge la page entièrement
 }
 
 function displaySubMenu(title, buttons) {
@@ -2158,7 +2234,7 @@ function filterShiftAgentList() {
     Array.from(select.options).forEach(opt => opt.style.display = opt.text.toLowerCase().includes(term) ? '' : 'none');
 }
 
-function applyShiftModification() {
+async function applyShiftModification() {
     const agentCode = document.getElementById('shiftAgent').value;
     const dateStr = document.getElementById('shiftDate').value;
     const newShift = document.getElementById('newShift').value;
@@ -2172,6 +2248,8 @@ function applyShiftModification() {
     if (!planningData[monthKey][agentCode]) planningData[monthKey][agentCode] = {};
     planningData[monthKey][agentCode][dateStr] = { shift: newShift, type: 'modification', comment };
     saveData();
+    
+  await saveSharedPlanning(); 
     
     addNotification('shift_modification', {
         action: 'update', agentCode: agentCode,
@@ -2196,7 +2274,7 @@ function showShiftExchangeForm() {
     document.getElementById('main-content').innerHTML = html;
 }
 
-function executeShiftExchange() {
+async function executeShiftExchange() {
     const a1 = document.getElementById('exchangeAgent1').value;
     const d1 = document.getElementById('exchangeDate1').value;
     const a2 = document.getElementById('exchangeAgent2').value;
@@ -2215,6 +2293,7 @@ function executeShiftExchange() {
     planningData[m1][a1][d1] = { shift: s2, type: 'echange', comment: `Échangé avec ${a2} - ${reason}` };
     planningData[m2][a2][d2] = { shift: s1, type: 'echange', comment: `Échangé avec ${a1} - ${reason}` };
     saveData();
+    await saveSharedPlanning();
     
     addNotification('shift_exchange', {
         action: 'exchange', agent1Code: a1, agent1Name: `${agents.find(a => a.code === a1)?.nom || a1} ${agents.find(a => a.code === a1)?.prenom || ''}`,
