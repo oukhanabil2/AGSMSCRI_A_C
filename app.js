@@ -155,22 +155,19 @@ for (const [monthKey, agentsData] of Object.entries(planningData)) {
         if (typeof showSnackbar === 'function') showSnackbar("❌ Erreur synchronisation planning");
     }
 }
-  async function loadSharedPlanning() {
-    alert("loadSharedPlanning appelée");
-    
-
+async function loadSharedPlanning() {
     if (!APPS_SCRIPT_URL) return false;
     try {
         const response = await fetch(`${APPS_SCRIPT_URL}?tab=Planning`);
         if (!response.ok) throw new Error("Erreur réseau");
         const cloudPlanning = await response.json();
         
+        // AJOUT : alerte pour voir le nombre d'entrées
+        alert("Nombre d'entrées reçues : " + cloudPlanning.length);
+        
         const newPlanningData = {};
         for (const item of cloudPlanning) {
-            // Normaliser la date : garder YYYY-MM-DD
             let rawDate = item.Date;
-            // Dans loadSharedPlanning(), après let rawDate = item.Date;
-alert("Date brute reçue : " + rawDate + " → nettoyée : " + cleanDate);
             let cleanDate = rawDate.split('T')[0];
             const monthKey = cleanDate.substring(0,7);
             const agentCode = item.AgentCode;
@@ -183,12 +180,16 @@ alert("Date brute reçue : " + rawDate + " → nettoyée : " + cleanDate);
             };
         }
         planningData = newPlanningData;
+        
+        // AJOUT : alerte pour confirmer l'enregistrement
+        alert("planningData mis à jour avec " + Object.keys(planningData).length + " mois");
+        
         localStorage.setItem('sga_planning', JSON.stringify(planningData));
-        console.log(`✅ Planning chargé (${cloudPlanning.length} entrées) avec dates normalisées`);
-        if (typeof showSnackbar === 'function') showSnackbar(`✅ Planning synchronisé`);
+        console.log(`✅ Planning chargé (${cloudPlanning.length} entrées)`);
         return true;
     } catch (erreur) {
         console.error("❌ Erreur chargement planning", erreur);
+        alert("Erreur chargement planning: " + erreur.message);
         return false;
     }
 }
