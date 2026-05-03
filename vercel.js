@@ -1,7 +1,7 @@
 {
   "rewrites": [
     {
-      "source": "/api/(.*)", "distination":https://script.google.com/macros/s/AKfycbw-96AHsem7svPRbSEsoUpAWXrfu_FHbaIisRFpGeOSRHI7Io9UVDZX8dlObPicq-Q/exec"/tabs/$1"
+      "source": "/api/(.*)", "distination"https://script.google.com/macros/s/AKfycbxEj7lQyKMgz61Ime0Fpwpd0yrzbGIE2hrgdiXoojtX2OhoKUgWw518Pl_qcri53VZaTw/exec/tabs/$1"
     }
   ],
   "headers": [
