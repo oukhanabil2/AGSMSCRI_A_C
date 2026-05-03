@@ -2037,6 +2037,7 @@ function generateGlobalPlanning() {
 }
 
 function showGlobalPlanningWithTotals(month, year, groupFilter = 'ALL') {
+alert("Génération du planning, planningData contient " + Object.keys(planningData).length + " mois"); 
     let actifs = agents.filter(a => a.statut === 'actif');
     if (currentUser.role === 'CP') {
         actifs = actifs.filter(a => a.groupe === currentUser.groupe);
