@@ -155,7 +155,10 @@ for (const [monthKey, agentsData] of Object.entries(planningData)) {
         if (typeof showSnackbar === 'function') showSnackbar("❌ Erreur synchronisation planning");
     }
 }
-async function loadSharedPlanning() {
+  async function loadSharedPlanning() {
+    alert("loadSharedPlanning appelée");
+    
+
     if (!APPS_SCRIPT_URL) return false;
     try {
         const response = await fetch(`${APPS_SCRIPT_URL}?tab=Planning`);
@@ -1031,11 +1034,13 @@ function displayMainMenu() {
 }
 
 async function refreshAllData() {
-    showSnackbar("🔄 Synchronisation en cours...");
+    alert("1. Début rafraîchissement");
     await loadSharedAgents();
+    alert("2. Agents chargés");
     await loadSharedPlanning();
+    alert("3. Planning chargé");
     showSnackbar("✅ Données mises à jour");
-    window.location.reload(); // Recharge la page entièrement
+    window.location.reload();
 }
 
 function displaySubMenu(title, buttons) {
@@ -2245,7 +2250,12 @@ function filterShiftAgentList() {
     Array.from(select.options).forEach(opt => opt.style.display = opt.text.toLowerCase().includes(term) ? '' : 'none');
 }
 
-async function applyShiftModification() {
+  async function applyShiftModification() {
+    alert("1. Modification shift");
+
+    await saveSharedPlanning();
+    alert("2. Planning sauvegardé");
+
     const agentCode = document.getElementById('shiftAgent').value;
     const dateStr = document.getElementById('shiftDate').value;
     const newShift = document.getElementById('newShift').value;
@@ -2260,7 +2270,8 @@ async function applyShiftModification() {
     planningData[monthKey][agentCode][dateStr] = { shift: newShift, type: 'modification', comment };
     saveData();
     
-  await saveSharedPlanning(); 
+  await saveSharedPlanning();
+    alert("2. Planning sauvegardé");
     
     addNotification('shift_modification', {
         action: 'update', agentCode: agentCode,
