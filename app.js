@@ -116,14 +116,10 @@ async function saveSharedPlanning() {
         for (const [monthKey, agentsData] of Object.entries(planningData)) {
             for (const [agentCode, days] of Object.entries(agentsData)) {
                 for (const [dateStr, shiftData] of Object.entries(days)) {
-                    // Forcer le format YYYY-MM-DD
-                    let cleanDate = dateStr.split('T')[0];
-                    if (cleanDate.length !== 10) {
-                        const d = new Date(dateStr);
-                        cleanDate = d.getFullYear() + '-' + 
-                                   String(d.getMonth() + 1).padStart(2,'0') + '-' + 
-                                   String(d.getDate()).padStart(2,'0');
-                    }
+                    // Garder la date exacte telle quelle
+                    let cleanDate = dateStr;
+                    if (cleanDate.includes('T')) cleanDate = cleanDate.split('T')[0];
+                    
                     dataToSend.push({
                         AgentCode: agentCode,
                         Date: cleanDate,
@@ -141,15 +137,10 @@ async function saveSharedPlanning() {
             body: JSON.stringify(dataToSend)
         });
         const text = await response.text();
-        if (text === "OK") {
-            console.log("✅ Planning sauvegardé");
-            if (typeof showSnackbar === 'function') showSnackbar("✅ Planning synchronisé");
-        } else {
-            throw new Error(text);
-        }
+        if (text !== "OK") throw new Error(text);
+        console.log("✅ Planning sauvegardé");
     } catch (err) {
         console.error("❌ Erreur sauvegarde planning", err);
-        if (typeof showSnackbar === 'function') showSnackbar("❌ Erreur synchronisation planning");
     }
 }
 async function loadSharedPlanning() {
@@ -161,34 +152,24 @@ async function loadSharedPlanning() {
         
         const newPlanningData = {};
         for (const item of cloudPlanning) {
-            // Ignorer les entrées sans date ou sans AgentCode
-            if (!item.Date || !item.AgentCode) {
-                console.warn("Entrée ignorée (date ou agent manquant):", item);
-                continue;
-            }
+            if (!item.Date || !item.AgentCode) continue;
             
+            // NE PAS transformer la date - la garder exactement comme elle est stockée
             let rawDate = item.Date;
-            let cleanDate;
             
-            // Nettoyage robuste de la date
-            if (typeof rawDate === 'string') {
-                if (rawDate.includes('T')) {
-                    cleanDate = rawDate.split('T')[0];
-                } else if (rawDate.match(/^\d{4}-\d{2}-\d{2}/)) {
-                    cleanDate = rawDate.substring(0, 10);
-                } else {
-                    console.warn("Format de date non reconnu:", rawDate);
-                    continue;
-                }
+            // Si la date contient un 'T', on prend ce qu'il y a AVANT (pas d'interprétation)
+            let cleanDate;
+            if (rawDate.includes('T')) {
+                cleanDate = rawDate.split('T')[0];
             } else {
-                console.warn("Date n'est pas une chaîne:", rawDate);
-                continue;
+                cleanDate = rawDate;
             }
             
-            // Vérifier que cleanDate est valide
-            if (!cleanDate || cleanDate.length !== 10) {
-                console.warn("Date nettoyée invalide:", cleanDate);
-                continue;
+            // CRUCIAL : on force la date à rester en UTC pour éviter le décalage
+            const parts = cleanDate.split('-');
+            if (parts.length === 3) {
+                // Reconstruire la date sans laisser le navigateur l'interpréter
+                cleanDate = `${parts[0]}-${parts[1]}-${parts[2]}`;
             }
             
             const monthKey = cleanDate.substring(0,7);
@@ -205,8 +186,7 @@ async function loadSharedPlanning() {
         }
         planningData = newPlanningData;
         localStorage.setItem('sga_planning', JSON.stringify(planningData));
-        console.log(`✅ Planning chargé (${cloudPlanning.length} entrées, ${Object.keys(planningData).length} mois)`);
-        if (typeof showSnackbar === 'function') showSnackbar(`✅ Planning synchronisé`);
+        console.log(`✅ Planning chargé (${cloudPlanning.length} entrées)`);
         return true;
     } catch (erreur) {
         console.error("❌ Erreur chargement planning", erreur);
@@ -579,11 +559,14 @@ function getJokerShift(jokerCode, dateStr) {
 }
 
 function getShiftForAgent(agentCode, dateStr) {
-    // Normaliser la date d'entrée
-    const cleanDateStr = dateStr.split('T')[0];
+    // Normaliser la date d'entrée (reçue en paramètre)
+    let cleanDateStr = dateStr;
+    if (cleanDateStr.includes('T')) cleanDateStr = cleanDateStr.split('T')[0];
+    
     const monthKey = cleanDateStr.substring(0, 7);
     const existing = planningData[monthKey]?.[agentCode]?.[cleanDateStr];
     if (existing && existing.shift) return existing.shift;
+    
     const agent = agents.find(a => a.code === agentCode);
     if (!agent || agent.statut !== 'actif') return '-';
     if (agent.groupe === 'J') return getJokerShift(agentCode, cleanDateStr);
