@@ -112,29 +112,28 @@ alert("Exemple date envoyée : " + dataToSend[0]?.Date);
 async function saveSharedPlanning() {
     if (!APPS_SCRIPT_URL) return;
     try {
-     const dataToSend = [];
-for (const [monthKey, agentsData] of Object.entries(planningData)) {
-    for (const [agentCode, days] of Object.entries(agentsData)) {
-        for (const [dateStr, shiftData] of Object.entries(days)) {
-            // FORCER le format YYYY-MM-DD sans timezone
-            let cleanDate = dateStr.split('T')[0];
-            if (!cleanDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
-                // Si ce n'est pas encore au bon format, le construire
-                const d = new Date(dateStr);
-                cleanDate = d.getFullYear() + '-' + 
-                           String(d.getMonth() + 1).padStart(2,'0') + '-' + 
-                           String(d.getDate()).padStart(2,'0');
+        const dataToSend = [];
+        for (const [monthKey, agentsData] of Object.entries(planningData)) {
+            for (const [agentCode, days] of Object.entries(agentsData)) {
+                for (const [dateStr, shiftData] of Object.entries(days)) {
+                    // Forcer le format YYYY-MM-DD
+                    let cleanDate = dateStr.split('T')[0];
+                    if (cleanDate.length !== 10) {
+                        const d = new Date(dateStr);
+                        cleanDate = d.getFullYear() + '-' + 
+                                   String(d.getMonth() + 1).padStart(2,'0') + '-' + 
+                                   String(d.getDate()).padStart(2,'0');
+                    }
+                    dataToSend.push({
+                        AgentCode: agentCode,
+                        Date: cleanDate,
+                        Shift: shiftData.shift,
+                        Type: shiftData.type || 'theorique',
+                        Commentaire: shiftData.comment || ''
+                    });
+                }
             }
-            dataToSend.push({
-                AgentCode: agentCode,
-                Date: cleanDate,
-                Shift: shiftData.shift,
-                Type: shiftData.type || 'theorique',
-                Commentaire: shiftData.comment || ''
-            });
         }
-    }
-}
         
         const response = await fetch(`${APPS_SCRIPT_URL}?tab=Planning&replace=true`, {
             method: 'POST',
@@ -142,7 +141,6 @@ for (const [monthKey, agentsData] of Object.entries(planningData)) {
             body: JSON.stringify(dataToSend)
         });
         const text = await response.text();
-        alert("Réponse du script : " + text);  // Temporaire pour voir la réponse
         if (text === "OK") {
             console.log("✅ Planning sauvegardé");
             if (typeof showSnackbar === 'function') showSnackbar("✅ Planning synchronisé");
@@ -151,7 +149,6 @@ for (const [monthKey, agentsData] of Object.entries(planningData)) {
         }
     } catch (err) {
         console.error("❌ Erreur sauvegarde planning", err);
-        alert("Erreur : " + err.message);
         if (typeof showSnackbar === 'function') showSnackbar("❌ Erreur synchronisation planning");
     }
 }
@@ -162,17 +159,44 @@ async function loadSharedPlanning() {
         if (!response.ok) throw new Error("Erreur réseau");
         const cloudPlanning = await response.json();
         
-        // AJOUT : alerte pour voir le nombre d'entrées
-        alert("Nombre d'entrées reçues : " + cloudPlanning.length);
-        
         const newPlanningData = {};
         for (const item of cloudPlanning) {
+            // Ignorer les entrées sans date ou sans AgentCode
+            if (!item.Date || !item.AgentCode) {
+                console.warn("Entrée ignorée (date ou agent manquant):", item);
+                continue;
+            }
+            
             let rawDate = item.Date;
-            let cleanDate = rawDate.split('T')[0];
+            let cleanDate;
+            
+            // Nettoyage robuste de la date
+            if (typeof rawDate === 'string') {
+                if (rawDate.includes('T')) {
+                    cleanDate = rawDate.split('T')[0];
+                } else if (rawDate.match(/^\d{4}-\d{2}-\d{2}/)) {
+                    cleanDate = rawDate.substring(0, 10);
+                } else {
+                    console.warn("Format de date non reconnu:", rawDate);
+                    continue;
+                }
+            } else {
+                console.warn("Date n'est pas une chaîne:", rawDate);
+                continue;
+            }
+            
+            // Vérifier que cleanDate est valide
+            if (!cleanDate || cleanDate.length !== 10) {
+                console.warn("Date nettoyée invalide:", cleanDate);
+                continue;
+            }
+            
             const monthKey = cleanDate.substring(0,7);
             const agentCode = item.AgentCode;
+            
             if (!newPlanningData[monthKey]) newPlanningData[monthKey] = {};
             if (!newPlanningData[monthKey][agentCode]) newPlanningData[monthKey][agentCode] = {};
+            
             newPlanningData[monthKey][agentCode][cleanDate] = {
                 shift: item.Shift,
                 type: item.Type || 'theorique',
@@ -180,16 +204,12 @@ async function loadSharedPlanning() {
             };
         }
         planningData = newPlanningData;
-        
-        // AJOUT : alerte pour confirmer l'enregistrement
-        alert("planningData mis à jour avec " + Object.keys(planningData).length + " mois");
-        
         localStorage.setItem('sga_planning', JSON.stringify(planningData));
-        console.log(`✅ Planning chargé (${cloudPlanning.length} entrées)`);
+        console.log(`✅ Planning chargé (${cloudPlanning.length} entrées, ${Object.keys(planningData).length} mois)`);
+        if (typeof showSnackbar === 'function') showSnackbar(`✅ Planning synchronisé`);
         return true;
     } catch (erreur) {
         console.error("❌ Erreur chargement planning", erreur);
-        alert("Erreur chargement planning: " + erreur.message);
         return false;
     }
 }
@@ -559,13 +579,15 @@ function getJokerShift(jokerCode, dateStr) {
 }
 
 function getShiftForAgent(agentCode, dateStr) {
-    const monthKey = dateStr.substring(0, 7);
-    const existing = planningData[monthKey]?.[agentCode]?.[dateStr];
+    // Normaliser la date d'entrée
+    const cleanDateStr = dateStr.split('T')[0];
+    const monthKey = cleanDateStr.substring(0, 7);
+    const existing = planningData[monthKey]?.[agentCode]?.[cleanDateStr];
     if (existing && existing.shift) return existing.shift;
     const agent = agents.find(a => a.code === agentCode);
     if (!agent || agent.statut !== 'actif') return '-';
-    if (agent.groupe === 'J') return getJokerShift(agentCode, dateStr);
-    return getTheoreticalShift(agentCode, dateStr);
+    if (agent.groupe === 'J') return getJokerShift(agentCode, cleanDateStr);
+    return getTheoreticalShift(agentCode, cleanDateStr);
 }
 
 function getAvailableJokersForDates(dates) {
@@ -674,11 +696,14 @@ async function saveLeaveWithJoker() {
 function calculateAgentStats(agentCode, month, year) {
     const daysInMonth = new Date(year, month, 0).getDate();
     let travaillesNormaux = 0, feriesTravailles = 0, conges = 0, maladie = 0, autre = 0, repos = 0;
+    
     for (let day = 1; day <= daysInMonth; day++) {
         const dateStr = `${year}-${month.toString().padStart(2,'0')}-${day.toString().padStart(2,'0')}`;
         const date = new Date(year, month-1, day);
+        // Utiliser getShiftForAgent qui normalise déjà
         const shift = getShiftForAgent(agentCode, dateStr);
         const isHoliday = isHolidayDate(date);
+        
         if (shift === '1' || shift === '2' || shift === '3') {
             travaillesNormaux++;
             if (isHoliday) feriesTravailles++;
