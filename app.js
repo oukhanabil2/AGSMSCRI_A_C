@@ -116,21 +116,39 @@ async function saveSharedPlanning() {
         for (const [monthKey, agentsData] of Object.entries(planningData)) {
             for (const [agentCode, days] of Object.entries(agentsData)) {
                 for (const [dateStr, shiftData] of Object.entries(days)) {
-                    // Extraire UNIQUEMENT YYYY-MM-DD sans aucune interprétation
+                    // IGNORER les dates undefined ou null
+                    if (!dateStr || dateStr === "undefined") {
+                        console.warn("Date undefined ignorée pour", agentCode);
+                        continue;
+                    }
+                    
+                    // Reconstruire une date propre
                     let cleanDate = dateStr;
+                    
+                    // Extraire YYYY-MM-DD même si la chaîne est cassée
                     const match = cleanDate.match(/(\d{4})-(\d{2})-(\d{2})/);
                     if (match) {
                         cleanDate = match[1] + '-' + match[2] + '-' + match[3];
+                    } else {
+                        // Si aucun format reconnu, ignorer
+                        console.warn("Format de date invalide ignoré:", dateStr);
+                        continue;
                     }
+                    
                     dataToSend.push({
                         AgentCode: agentCode,
-                        Date: cleanDate,  // Envoie "2026-05-14" exactement
+                        Date: cleanDate,
                         Shift: shiftData.shift,
                         Type: shiftData.type || 'theorique',
                         Commentaire: shiftData.comment || ''
                     });
                 }
             }
+        }
+        
+        if (dataToSend.length === 0) {
+            console.log("Rien à sauvegarder");
+            return;
         }
         
         const response = await fetch(`${APPS_SCRIPT_URL}?tab=Planning&replace=true`, {
@@ -140,9 +158,11 @@ async function saveSharedPlanning() {
         });
         const text = await response.text();
         if (text !== "OK") throw new Error(text);
-        console.log("✅ Planning sauvegardé");
+        console.log(`✅ Planning sauvegardé (${dataToSend.length} entrées)`);
+        if (typeof showSnackbar === 'function') showSnackbar("✅ Planning synchronisé");
     } catch (err) {
         console.error("❌ Erreur sauvegarde planning", err);
+        if (typeof showSnackbar === 'function') showSnackbar("❌ Erreur synchronisation planning");
     }
 }
 async function loadSharedPlanning() {
@@ -2087,6 +2107,7 @@ alert("Génération du planning, planningData contient " + Object.keys(planningD
     document.getElementById('main-content').innerHTML = html;
 }
 
+
 function showGroupPlanningForm() {
     const currentYear = new Date().getFullYear();
     const currentMonth = new Date().getMonth() + 1;
@@ -2131,6 +2152,19 @@ function showGroupPlanningWithTotals(group, month, year) {
             <td style="text-align:center; padding:6px;">${agent.groupe}</td>`;
         for (let d = 1; d <= daysInMonth; d++) {
             const dateStr = `${year}-${month.toString().padStart(2,'0')}-${d.toString().padStart(2,'0')}`;
+            
+       
+            
+            // === AJOUTEZ CES LIGNES ICI ===
+            console.log("=== DEBUG PLANNING ===");
+            console.log("Agent:", agent.code);
+            console.log("Date recherchée:", dateStr);
+            const monthKey = dateStr.substring(0,7);
+            const shiftData = planningData[monthKey]?.[agent.code]?.[dateStr];
+            console.log("Donnée trouvée dans planningData:", shiftData);
+          
+  
+            
             const date = new Date(year, month-1, d);
             const shiftDisplay = getShiftDisplay(agent.code, dateStr);
             const shift = getShiftForAgent(agent.code, dateStr);
@@ -3924,6 +3958,23 @@ function resetUserPassword(id) {
 document.addEventListener('DOMContentLoaded', () => {
     console.log("🚀 SGA v8.0 - CleanCo - Démarrage...");
     loadData();
+   function nettoyerPlanningData() {
+    let modifie = false;
+    for (const [monthKey, agentsData] of Object.entries(planningData)) {
+        for (const [agentCode, days] of Object.entries(agentsData)) {
+            for (const [dateStr, shiftData] of Object.entries(days)) {
+                if (!dateStr || dateStr === "undefined") {
+                    delete planningData[monthKey][agentCode][dateStr];
+                    modifie = true;
+                }
+            }
+        }
+    }
+    if (modifie) {
+        localStorage.setItem('sga_planning', JSON.stringify(planningData));
+        console.log("PlanningData nettoyé des dates undefined");
+    }
+} 
     loadNotifications();
     const savedUser = localStorage.getItem('sga_current_user');
     if (savedUser) {
