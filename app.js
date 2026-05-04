@@ -578,24 +578,7 @@ function getShiftForAgent(agentCode, dateStr) {
     if (existing && existing.shift) return existing.shift;
     
     const agent = agents.find(a => a.code === agentCode);
-    if (!agent || agent.statut !== 'acfunction getShiftForAgent(agentCode, dateStr) {
-    // Normaliser la date d'entrée (reçue en paramètre depuis l'application)
-    let cleanDateStr = dateStr;
-    if (cleanDateStr.includes('T')) cleanDateStr = cleanDateStr.split('T')[0];
-    // Si la date est au format "YYYY-MM-DD" avec des zéros, on la garde
-    if (cleanDateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
-        // Pas de transformation supplémentaire
-    }
-    
-    const monthKey = cleanDateStr.substring(0, 7);
-    const existing = planningData[monthKey]?.[agentCode]?.[cleanDateStr];
-    if (existing && existing.shift) return existing.shift;
-    
-    const agent = agents.find(a => a.code === agentCode);
     if (!agent || agent.statut !== 'actif') return '-';
-    if (agent.groupe === 'J') return getJokerShift(agentCode, cleanDateStr);
-    return getTheoreticalShift(agentCode, cleanDateStr);
-}tif') return '-';
     if (agent.groupe === 'J') return getJokerShift(agentCode, cleanDateStr);
     return getTheoreticalShift(agentCode, cleanDateStr);
 }
