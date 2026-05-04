@@ -116,9 +116,13 @@ async function saveSharedPlanning() {
         for (const [monthKey, agentsData] of Object.entries(planningData)) {
             for (const [agentCode, days] of Object.entries(agentsData)) {
                 for (const [dateStr, shiftData] of Object.entries(days)) {
-                    // Garder la date exacte telle quelle
+                    // Envoyer la date EXACTEMENT comme elle est stockée
+                    // Si elle contient un 'T', on prend avant, sinon on garde
                     let cleanDate = dateStr;
-                    if (cleanDate.includes('T')) cleanDate = cleanDate.split('T')[0];
+                    if (cleanDate.includes('T')) {
+                        cleanDate = cleanDate.split('T')[0];
+                    }
+                    // Ne RIEN faire d'autre
                     
                     dataToSend.push({
                         AgentCode: agentCode,
@@ -139,8 +143,10 @@ async function saveSharedPlanning() {
         const text = await response.text();
         if (text !== "OK") throw new Error(text);
         console.log("✅ Planning sauvegardé");
+        if (typeof showSnackbar === 'function') showSnackbar("✅ Planning synchronisé");
     } catch (err) {
         console.error("❌ Erreur sauvegarde planning", err);
+        if (typeof showSnackbar === 'function') showSnackbar("❌ Erreur synchronisation planning");
     }
 }
 async function loadSharedPlanning() {
@@ -154,22 +160,10 @@ async function loadSharedPlanning() {
         for (const item of cloudPlanning) {
             if (!item.Date || !item.AgentCode) continue;
             
-            // NE PAS transformer la date - la garder exactement comme elle est stockée
-            let rawDate = item.Date;
-            
-            // Si la date contient un 'T', on prend ce qu'il y a AVANT (pas d'interprétation)
-            let cleanDate;
-            if (rawDate.includes('T')) {
-                cleanDate = rawDate.split('T')[0];
-            } else {
-                cleanDate = rawDate;
-            }
-            
-            // CRUCIAL : on force la date à rester en UTC pour éviter le décalage
-            const parts = cleanDate.split('-');
-            if (parts.length === 3) {
-                // Reconstruire la date sans laisser le navigateur l'interpréter
-                cleanDate = `${parts[0]}-${parts[1]}-${parts[2]}`;
+            // Utiliser la date EXACTEMENT comme elle vient du cloud
+            let cleanDate = item.Date;
+            if (cleanDate.includes('T')) {
+                cleanDate = cleanDate.split('T')[0];
             }
             
             const monthKey = cleanDate.substring(0,7);
