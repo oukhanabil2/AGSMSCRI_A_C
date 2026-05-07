@@ -2,13 +2,42 @@
 console.log("🚀 SGA v8.0 - Application chargée");
 
 // ==================== PARTIE 1 : CONSTANTES & CONFIGURATION ====================
-const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxEj7lQyKMgz61Ime0Fpwpd0yrzbGIE2hrgdiXoojtX2OhoKUgWw518Pl_qcri53VZaTw/exec";
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwtO7nDcG2FnLEFsiCyKcM9hgH76m1y0WpfUVaXIaNrCIlT34E0xj_x4Tx_UsqatMTxUA/exec";
 const SHEET_BEST_BASE_URL = APPS_SCRIPT_URL;
 
 const JOURS_FRANCAIS = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
 const MOIS_FRANCAIS = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
 const SHIFT_LABELS = {'1': 'Matin', '2': 'Après-midi', '3': 'Nuit', 'R': 'Repos', 'C': 'Congé', 'M': 'Maladie', 'A': 'Autre absence', '-': 'Non défini'};
 const SHIFT_COLORS = {'1': '#3498db', '2': '#e74c3c', '3': '#9b59b6', 'R': '#2ecc71', 'C': '#f39c12', 'M': '#e67e22', 'A': '#95a5a6', '-': '#7f8c8d'};
+// ==================== FONCTION DE NETTOYAGE DES DATES ====================
+function cleanAllDatesInPlanning(data) {
+    const cleaned = {};
+    for (const [monthKey, agentsData] of Object.entries(data)) {
+        cleaned[monthKey] = {};
+        for (const [agentCode, days] of Object.entries(agentsData)) {
+            cleaned[monthKey][agentCode] = {};
+            for (const [dateStr, shiftData] of Object.entries(days)) {
+                let cleanDate = dateStr;
+                if (cleanDate.includes('T')) {
+                    cleanDate = cleanDate.split('T')[0];
+                }
+                if (cleanDate.includes('+')) {
+                    cleanDate = cleanDate.split('+')[0];
+                }
+                if (!cleanDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
+                    const d = new Date(dateStr);
+                    if (!isNaN(d.getTime())) {
+                        cleanDate = d.getFullYear() + '-' + 
+                                   String(d.getMonth() + 1).padStart(2,'0') + '-' + 
+                                   String(d.getDate()).padStart(2,'0');
+                    }
+                }
+                cleaned[monthKey][agentCode][cleanDate] = shiftData;
+            }
+        }
+    }
+    return cleaned;
+}
 
 let agents = [];
 let planningData = {};
@@ -22,6 +51,21 @@ let autoSaveInterval = null;
 let currentUser = null;
 let soldesConges = [];   // SEULE variable pour les soldes (stockage annuel)
 let notifications = [];
+let congesList = [];   // Liste des périodes de congés (agentCode, startDate, endDate, type, comment, joker)
+// ==================== FONCTION UTILITAIRE DE DATE (CORRECTION TIMEZONE) ====================
+function formatDateUTC(date) {
+    if (!date) return '';
+    if (typeof date === 'string') {
+        const clean = date.split('T')[0];
+        if (clean.match(/^\d{4}-\d{2}-\d{2}$/)) return clean;
+    }
+    const d = new Date(date);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
 
 let users = [
     { id: 1, username: "admin", password: "NABIL1974", role: "ADMIN", nom: "Admin", prenom: "Système", groupe: null, agentCode: null },
@@ -70,6 +114,10 @@ alert("Nombre d'agents reçus : " + cloudAgents.length); // <-- AJOUTEZ CETTE LI
 }
 
 async function saveSharedAgents() {
+ 
+    alert("saveSharedPanique appelée, nombre de codes = " + panicCodes.length);
+    
+ 
     if (!APPS_SCRIPT_URL) return;
     try {
         const dataToSend = agents.map(a => ({
@@ -89,9 +137,6 @@ async function saveSharedAgents() {
             DateSortie: a.date_sortie || ''
         }));
         
-        // Tentative d'envoi vers votre script Google (inchangé)
-        // Dans saveSharedPlanning(), avant fetch
-alert("Exemple date envoyée : " + dataToSend[0]?.Date);
         const response = await fetch(`${APPS_SCRIPT_URL}?tab=Agents&replace=true`, {
             method: 'POST',
             headers: { 'Content-Type': 'text/plain' },
@@ -104,8 +149,6 @@ alert("Exemple date envoyée : " + dataToSend[0]?.Date);
         if (typeof showSnackbar === 'function') showSnackbar("✅ Agents synchronisés");
     } catch (err) {
         console.error("❌ Erreur sauvegarde Google", err);
-        // Optionnel : envoyer aussi vers un webhook de secours
-        // (vous pourrez ajouter cette partie plus tard)
         if (typeof showSnackbar === 'function') showSnackbar("❌ Erreur de synchronisation");
     }
 }
@@ -116,25 +159,8 @@ async function saveSharedPlanning() {
         for (const [monthKey, agentsData] of Object.entries(planningData)) {
             for (const [agentCode, days] of Object.entries(agentsData)) {
                 for (const [dateStr, shiftData] of Object.entries(days)) {
-                    // IGNORER les dates undefined ou null
-                    if (!dateStr || dateStr === "undefined") {
-                        console.warn("Date undefined ignorée pour", agentCode);
-                        continue;
-                    }
-                    
-                    // Reconstruire une date propre
-                    let cleanDate = dateStr;
-                    
-                    // Extraire YYYY-MM-DD même si la chaîne est cassée
-                    const match = cleanDate.match(/(\d{4})-(\d{2})-(\d{2})/);
-                    if (match) {
-                        cleanDate = match[1] + '-' + match[2] + '-' + match[3];
-                    } else {
-                        // Si aucun format reconnu, ignorer
-                        console.warn("Format de date invalide ignoré:", dateStr);
-                        continue;
-                    }
-                    
+                    // ✅ Utiliser formatDateUTC au lieu de new Date()
+                    let cleanDate = formatDateUTC(dateStr);
                     dataToSend.push({
                         AgentCode: agentCode,
                         Date: cleanDate,
@@ -146,11 +172,6 @@ async function saveSharedPlanning() {
             }
         }
         
-        if (dataToSend.length === 0) {
-            console.log("Rien à sauvegarder");
-            return;
-        }
-        
         const response = await fetch(`${APPS_SCRIPT_URL}?tab=Planning&replace=true`, {
             method: 'POST',
             headers: { 'Content-Type': 'text/plain' },
@@ -158,11 +179,299 @@ async function saveSharedPlanning() {
         });
         const text = await response.text();
         if (text !== "OK") throw new Error(text);
-        console.log(`✅ Planning sauvegardé (${dataToSend.length} entrées)`);
+        console.log("✅ Planning sauvegardé");
         if (typeof showSnackbar === 'function') showSnackbar("✅ Planning synchronisé");
     } catch (err) {
         console.error("❌ Erreur sauvegarde planning", err);
         if (typeof showSnackbar === 'function') showSnackbar("❌ Erreur synchronisation planning");
+    }
+}
+// ==================== SYNCHRONISATION SOLDES CONGÉS ====================
+async function loadSharedSoldes() {
+    if (!APPS_SCRIPT_URL) return false;
+    try {
+        const response = await fetch(`${APPS_SCRIPT_URL}?tab=SoldesConges`);
+        if (!response.ok) throw new Error("Erreur réseau");
+        const cloudSoldes = await response.json();
+        
+        soldesConges = cloudSoldes.map(s => ({
+            agentCode: s.AgentCode,
+            annee: s.Annee,
+            droitAnnuel: s.DroitAnnuel,
+            reportAnt: s.ReportAnt,
+            totalDispo: s.TotalDispo,
+            pris: s.Pris,
+            reste: s.Reste
+        }));
+        
+        localStorage.setItem('sga_soldes_conges', JSON.stringify(soldesConges));
+        console.log(`✅ Soldes chargés (${soldesConges.length} entrées)`);
+        if (typeof showSnackbar === 'function') showSnackbar(`✅ Soldes synchronisés`);
+        return true;
+    } catch (erreur) {
+        console.error("❌ Erreur chargement soldes", erreur);
+        return false;
+    }
+}
+
+async function saveSharedSoldes() {
+    if (!APPS_SCRIPT_URL) return;
+    try {
+        const dataToSend = soldesConges.map(s => ({
+            AgentCode: s.agentCode,
+            Annee: s.annee,
+            DroitAnnuel: s.droitAnnuel,
+            ReportAnt: s.reportAnt,
+            TotalDispo: s.totalDispo,
+            Pris: s.pris,
+            Reste: s.reste
+        }));
+        
+        const response = await fetch(`${APPS_SCRIPT_URL}?tab=SoldesConges&replace=true`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify(dataToSend)
+        });
+        const text = await response.text();
+        if (text === "OK") {
+            console.log("✅ Soldes sauvegardés");
+            if (typeof showSnackbar === 'function') showSnackbar("✅ Soldes synchronisés");
+        } else {
+            throw new Error(text);
+        }
+    } catch (err) {
+        console.error("❌ Erreur sauvegarde soldes", err);
+        if (typeof showSnackbar === 'function') showSnackbar("❌ Erreur synchronisation soldes");
+    }
+}
+
+// ==================== SYNCHRONISATION PANIQUE ====================
+async function loadSharedPanique() {
+    if (!APPS_SCRIPT_URL) return false;
+    try {
+        const response = await fetch(`${APPS_SCRIPT_URL}?tab=Panique`);
+        if (!response.ok) throw new Error("Erreur réseau");
+        const cloudPanique = await response.json();
+        if (Array.isArray(cloudPanique)) {
+            panicCodes = cloudPanique.map(p => ({
+                agent_code: p.AgentCode,
+                code: p.Code,
+                poste: p.Poste || '',
+                comment: p.Commentaire || '',
+                created_at: new Date().toISOString()
+            }));
+            localStorage.setItem('sga_panic_codes', JSON.stringify(panicCodes));
+            console.log(`✅ Codes panique chargés (${panicCodes.length})`);
+        } else {
+            panicCodes = [];
+        }
+        return true;
+    } catch (err) {
+        console.error("❌ Erreur chargement panique", err);
+        return false;
+    }
+}
+
+async function saveSharedPanique() {
+    if (!APPS_SCRIPT_URL) return;
+    try {
+        const dataToSend = panicCodes.map(p => ({
+            AgentCode: p.agent_code,
+            Code: p.code,
+            Poste: p.poste || '',
+            Commentaire: p.comment || ''
+        }));
+        const response = await fetch(`${APPS_SCRIPT_URL}?tab=Panique&replace=true`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify(dataToSend)
+        });
+        const text = await response.text();
+        if (text !== "OK") throw new Error(text);
+        console.log("✅ Codes panique sauvegardés");
+    } catch (err) {
+        console.error("❌ Erreur sauvegarde panique", err);
+    }
+}
+async function saveSharedPanique() {
+    if (!APPS_SCRIPT_URL) return;
+    try {
+        const dataToSend = panicCodes.map(p => ({
+            AgentCode: p.agent_code,
+            Code: p.code,
+            Poste: p.poste || '',
+            Commentaire: p.comment || ''
+        }));
+        console.log("Envoi Panique:", dataToSend);
+        const response = await fetch(`${APPS_SCRIPT_URL}?tab=Panique&replace=true`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify(dataToSend)
+        });
+        const text = await response.text();
+        if (text !== "OK") throw new Error(`Réponse du serveur: ${text}`);
+        console.log("✅ Codes panique sauvegardés");
+    } catch (err) {
+        console.error("❌ Erreur sauvegarde panique", err);
+        alert("Erreur sauvegarde panique: " + err.message);
+    }
+}
+
+
+
+// ==================== SYNCHRONISATION HABILLEMENT ====================
+async function loadSharedHabillement() {
+    if (!APPS_SCRIPT_URL) return false;
+    try {
+        const response = await fetch(`${APPS_SCRIPT_URL}?tab=Habillement`);
+        if (!response.ok) throw new Error("Erreur réseau");
+        const cloudHabillement = await response.json();
+        if (Array.isArray(cloudHabillement)) {
+            uniforms = cloudHabillement.map(u => ({
+                agentCode: u.AgentCode,
+                date: u.Date,
+                articles: u.Articles ? (typeof u.Articles === 'string' ? u.Articles.split(',') : u.Articles) : [],
+                comment: u.Commentaire || '',
+                lastUpdated: u.LastUpdated || new Date().toISOString()
+            }));
+            localStorage.setItem('sga_uniforms', JSON.stringify(uniforms));
+            console.log(`✅ Habillement chargé (${uniforms.length})`);
+        } else {
+            uniforms = [];
+        }
+        return true;
+    } catch (err) {
+        console.error("❌ Erreur chargement habillement", err);
+        return false;
+    }
+}
+
+async function saveSharedHabillement() {
+    if (!APPS_SCRIPT_URL) return;
+    try {
+        const dataToSend = uniforms.map(u => ({
+            AgentCode: u.agentCode,
+            Date: u.date,
+            Articles: Array.isArray(u.articles) ? u.articles.join(', ') : u.articles,
+            Commentaire: u.comment || '',
+            LastUpdated: u.lastUpdated || new Date().toISOString()
+        }));
+        const response = await fetch(`${APPS_SCRIPT_URL}?tab=Habillement&replace=true`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify(dataToSend)
+        });
+        const text = await response.text();
+        if (text !== "OK") throw new Error(text);
+        console.log("✅ Habillement sauvegardé");
+    } catch (err) {
+        console.error("❌ Erreur sauvegarde habillement", err);
+    }
+}
+
+
+// ==================== SYNCHRONISATION AVERTISSEMENTS ====================
+async function loadSharedAvertissements() {
+    if (!APPS_SCRIPT_URL) return false;
+    try {
+        const response = await fetch(`${APPS_SCRIPT_URL}?tab=Avertissements`);
+        if (!response.ok) throw new Error("Erreur réseau");
+        const cloudAvertissements = await response.json();
+        warnings = cloudAvertissements.map(w => ({
+            id: w.Id,
+            agent_code: w.AgentCode,
+            type: w.Type,
+            date: w.Date,
+            description: w.Description,
+            status: w.Statut || 'active',
+            created_at: new Date().toISOString()
+        }));
+        localStorage.setItem('sga_warnings', JSON.stringify(warnings));
+        console.log(`✅ Avertissements chargés (${warnings.length})`);
+        return true;
+    } catch (erreur) {
+        console.error("❌ Erreur chargement avertissements", erreur);
+        return false;
+    }
+}
+
+async function saveSharedAvertissements() {
+    if (!APPS_SCRIPT_URL) return;
+    try {
+        const dataToSend = warnings.map(w => ({
+            Id: w.id,
+            AgentCode: w.agent_code,
+            Type: w.type,
+            Date: w.date,
+            Description: w.description,
+            Statut: w.status
+        }));
+        const response = await fetch(`${APPS_SCRIPT_URL}?tab=Avertissements&replace=true`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify(dataToSend)
+        });
+        const text = await response.text();
+        if (text !== "OK") throw new Error(text);
+        console.log("✅ Avertissements sauvegardés");
+    } catch (err) {
+        console.error("❌ Erreur sauvegarde avertissements", err);
+    }
+}
+// ==================== SYNCHRONISATION CONGÉS ====================
+async function loadSharedConges() {
+    if (!APPS_SCRIPT_URL) return false;
+    try {
+        const response = await fetch(`${APPS_SCRIPT_URL}?tab=Conges`);
+        if (!response.ok) throw new Error("Erreur réseau");
+        const cloudConges = await response.json();
+        
+        congesList = cloudConges.map(c => ({
+            agentCode: c.AgentCode,
+            startDate: c.DateDebut,
+            endDate: c.DateFin,
+            type: c.Type,
+            comment: c.Commentaire || '',
+            joker: c.Joker || null
+        }));
+        
+        localStorage.setItem('sga_conges', JSON.stringify(congesList));
+        console.log(`✅ Congés chargés (${congesList.length} périodes)`);
+        if (typeof showSnackbar === 'function') showSnackbar(`✅ ${congesList.length} périodes de congés synchronisées`);
+        return true;
+    } catch (erreur) {
+        console.error("❌ Erreur chargement congés", erreur);
+        return false;
+    }
+}
+
+async function saveSharedConges() {
+    if (!APPS_SCRIPT_URL) return;
+    try {
+        const dataToSend = congesList.map(c => ({
+            AgentCode: c.agentCode,
+            DateDebut: c.startDate,
+            DateFin: c.endDate,
+            Type: c.type,
+            Commentaire: c.comment || '',
+            Joker: c.joker || ''
+        }));
+        
+        const response = await fetch(`${APPS_SCRIPT_URL}?tab=Conges&replace=true`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify(dataToSend)
+        });
+        const text = await response.text();
+        if (text === "OK") {
+            console.log("✅ Congés sauvegardés");
+            if (typeof showSnackbar === 'function') showSnackbar("✅ Congés synchronisés");
+        } else {
+            throw new Error(text);
+        }
+    } catch (err) {
+        console.error("❌ Erreur sauvegarde congés", err);
+        if (typeof showSnackbar === 'function') showSnackbar("❌ Erreur synchronisation congés");
     }
 }
 async function loadSharedPlanning() {
@@ -174,33 +483,29 @@ async function loadSharedPlanning() {
         
         const newPlanningData = {};
         for (const item of cloudPlanning) {
-            if (!item.Date || !item.AgentCode) continue;
+            let cleanDate = item.Date;
             
-            // TRAITER LA DATE UNIQUEMENT COMME UNE CHAÎNE
-            // Ne JAMAIS créer d'objet Date, ne JAMAIS utiliser new Date()
-            let dateStr = item.Date;
-            
-            // Si c'est une chaîne ISO avec T, prendre la partie avant T
-            if (typeof dateStr === 'string' && dateStr.includes('T')) {
-                dateStr = dateStr.split('T')[0];
+            // ✅ CORRECTION : Si la date est un objet Date JavaScript
+            if (cleanDate && typeof cleanDate === 'object' && cleanDate.getFullYear) {
+                const year = cleanDate.getFullYear();
+                const month = String(cleanDate.getMonth() + 1).padStart(2, '0');
+                const day = String(cleanDate.getDate()).padStart(2, '0');
+                cleanDate = `${year}-${month}-${day}`;
+            }
+            // Si c'est une string, nettoyer
+            else if (typeof cleanDate === 'string') {
+                cleanDate = cleanDate.split('T')[0];
+                // Vérifier si la date a été décalée (ex: 2026-05-27 au lieu de 2026-05-28)
+                // On ne peut pas corriger automatiquement, mieux vaut prévenir
             }
             
-            // FORCER le format YYYY-MM-DD en extrayant les chiffres
-            const match = dateStr.match(/(\d{4})-(\d{2})-(\d{2})/);
-            if (match) {
-                dateStr = match[1] + '-' + match[2] + '-' + match[3];
-            } else {
-                console.warn("Date invalide ignorée:", dateStr);
-                continue;
-            }
+            if (!cleanDate || !cleanDate.match(/^\d{4}-\d{2}-\d{2}$/)) continue;
             
-            const monthKey = dateStr.substring(0,7);
+            const monthKey = cleanDate.substring(0,7);
             const agentCode = item.AgentCode;
-            
             if (!newPlanningData[monthKey]) newPlanningData[monthKey] = {};
             if (!newPlanningData[monthKey][agentCode]) newPlanningData[monthKey][agentCode] = {};
-            
-            newPlanningData[monthKey][agentCode][dateStr] = {
+            newPlanningData[monthKey][agentCode][cleanDate] = {
                 shift: item.Shift,
                 type: item.Type || 'theorique',
                 comment: item.Commentaire || ''
@@ -208,7 +513,7 @@ async function loadSharedPlanning() {
         }
         planningData = newPlanningData;
         localStorage.setItem('sga_planning', JSON.stringify(planningData));
-        console.log(`✅ Planning chargé (${cloudPlanning.length} entrées)`);
+        console.log(`✅ Planning chargé`);
         return true;
     } catch (erreur) {
         console.error("❌ Erreur chargement planning", erreur);
@@ -243,7 +548,8 @@ async function loadSharedLeaves() {
                     count++;
                 }
             });
-            localStorage.setItem('sga_planning', JSON.stringify(planningData));
+            localStorage.removeItem('sga_planning');
+loadSharedPlanning().then(() => location.reload());
             console.log(`✅ ${cloudLeaves.length} congés chargés du cloud (${count} jours)`);
             return true;
         }
@@ -293,6 +599,7 @@ async function deleteLeaveFromCloud(agentCode, startDate, endDate) {
 
 // ==================== PARTIE 3 : FONCTIONS DE BASE (SAVE / LOAD / INIT) ====================
 function saveData() {
+    // Sauvegarde locale (localStorage)
     localStorage.setItem('sga_users', JSON.stringify(users));
     localStorage.setItem('sga_agents', JSON.stringify(agents));
     localStorage.setItem('sga_planning', JSON.stringify(planningData));
@@ -304,14 +611,25 @@ function saveData() {
     localStorage.setItem('sga_notifications', JSON.stringify(replacementNotifications));
     localStorage.setItem('sga_sys_notifications', JSON.stringify(notifications));
     localStorage.setItem('sga_soldes_conges', JSON.stringify(soldesConges));
+    
+    // Synchronisation cloud (sans attendre pour ne pas bloquer l'UI)
     saveSharedAgents();
-    console.log("💾 Données sauvegardées -", agents.length, "agents");
+    saveSharedPlanning();
+    saveSharedPanique();      // doit exister
+    saveSharedHabillement();  // doit exister
+    saveSharedAvertissements();// doit exister
+    
+    console.log("💾 Données sauvegardées localement et cloud (lancé)");
 }
 
 async function loadData() {
+    // 1. Chargement depuis localStorage
     const savedUsers = localStorage.getItem('sga_users');
     if (savedUsers) users = JSON.parse(savedUsers);
-    planningData = JSON.parse(localStorage.getItem('sga_planning') || '{}');
+    
+    const rawPlanning = JSON.parse(localStorage.getItem('sga_planning') || '{}');
+    planningData = cleanAllDatesInPlanning(rawPlanning);
+    
     holidays = JSON.parse(localStorage.getItem('sga_holidays') || '[]');
     panicCodes = JSON.parse(localStorage.getItem('sga_panic_codes') || '[]');
     radios = JSON.parse(localStorage.getItem('sga_radios') || '[]');
@@ -329,9 +647,19 @@ async function loadData() {
     } else {
         if (agents.length === 0) initializeDemoAgents();
     }
+    
+    // 2. Synchronisation cloud en priorité (écrase les données locales si différent)
+    await loadSharedAgents();
+    await loadSharedPlanning();
+    await loadSharedPanique();       // à définir
+    await loadSharedHabillement();   // à définir
+    await loadSharedAvertissements();// à définir
+    // Optionnel : charger aussi radios et notifications si vous avez des feuilles
+    
     displayMainMenu();
     if (currentUser) syncAgentsFromCloud();
 }
+
 
 async function syncAgentsFromCloud() {
     const success = await loadSharedAgents();
@@ -580,18 +908,33 @@ function getJokerShift(jokerCode, dateStr) {
     return 'R';
 }
 function getShiftForAgent(agentCode, dateStr) {
-    // Normaliser la date d'entrée sans la convertir
+    // Normaliser la date d'entrée (venant de l'affichage)
     let cleanDateStr = dateStr;
-    const match = cleanDateStr.match(/(\d{4})-(\d{2})-(\d{2})/);
-    if (match) {
-        cleanDateStr = match[1] + '-' + match[2] + '-' + match[3];
+    if (cleanDateStr.includes('T')) {
+        cleanDateStr = cleanDateStr.split('T')[0];
     }
+    // Prendre les 10 premiers caractères
+    if (cleanDateStr.length > 10) {
+        cleanDateStr = cleanDateStr.substring(0, 10);
+    }
+    
     const monthKey = cleanDateStr.substring(0, 7);
+    
+    // DEBUG: vérifier ce qui est cherché
+    console.log("Recherche shift pour", agentCode, "date", cleanDateStr);
+    console.log("planningData du mois", monthKey, ":", planningData[monthKey]?.[agentCode]);
+    
     const existing = planningData[monthKey]?.[agentCode]?.[cleanDateStr];
-    if (existing && existing.shift) return existing.shift;
+    if (existing && existing.shift) {
+        console.log("Shift trouvé:", existing.shift);
+        return existing.shift;
+    }
+    
+    console.log("Shift non trouvé, calcul théorique");
     const agent = agents.find(a => a.code === agentCode);
     if (!agent || agent.statut !== 'actif') return '-';
     if (agent.groupe === 'J') return getJokerShift(agentCode, cleanDateStr);
+   if (agent.groupe === 'J') return getJokerShift(agentCode, dateStr); 
     return getTheoreticalShift(agentCode, cleanDateStr);
 }
 
@@ -623,12 +966,16 @@ async function saveLeaveWithJoker() {
         const end = document.getElementById('periodEnd').value;
         if (!start || !end) { alert("⚠️ Dates début et fin requises"); return; }
         let cur = new Date(start);
-        while (cur <= new Date(end)) { dates.push(cur.toISOString().split('T')[0]); cur.setDate(cur.getDate() + 1); }
+        const endDate = new Date(end);
+        while (cur <= endDate) {
+            dates.push(formatDateUTC(cur));
+            cur.setDate(cur.getDate() + 1);
+        }
         absenceType = 'C';
     } else {
         const date = document.getElementById('leaveDate').value;
         if (!date) { alert("⚠️ Date requise"); return; }
-        dates = [date];
+        dates = [formatDateUTC(date)];
         absenceType = document.getElementById('absenceType').value;
     }
 
@@ -691,11 +1038,24 @@ async function saveLeaveWithJoker() {
         });
     }
     saveData();
-  await saveSharedPlanning();  
+    await saveSharedPlanning();  
     alert(`✅ ${absenceType === 'C' ? 'Congés' : 'Absences'} enregistrés${selectedJoker ? `\n🔄 Joker ${selectedJoker.code} remplace ${agentCode}` : ' (sans remplacement)'}`);
     await saveLeaveToCloud(agentCode, dates[0], dates[dates.length-1], absenceType, comment, selectedJoker ? selectedJoker.code : null);
+// Mettre à jour congesList avec la nouvelle période
+congesList.push({
+    agentCode: agentCode,
+    startDate: dates[0],
+    endDate: dates[dates.length-1],
+    type: absenceType,
+    comment: comment,
+    joker: selectedJoker ? selectedJoker.code : null
+});
+await saveSharedConges();    
     displayLeavesMenu();
 }
+
+
+
 
 // ==================== PARTIE 6 : STATISTIQUES ====================
 function calculateAgentStats(agentCode, month, year) {
@@ -705,8 +1065,10 @@ function calculateAgentStats(agentCode, month, year) {
     for (let day = 1; day <= daysInMonth; day++) {
         const dateStr = `${year}-${month.toString().padStart(2,'0')}-${day.toString().padStart(2,'0')}`;
         const date = new Date(year, month-1, day);
-        // Utiliser getShiftForAgent qui normalise déjà
+        // ICI : utiliser getShiftForAgent (qui gère les remplacements)
         const shift = getShiftForAgent(agentCode, dateStr);
+
+if (agentCode === "code_du_joker") console.log("Date", dateStr, "Shift", shift);
         const isHoliday = isHolidayDate(date);
         
         if (shift === '1' || shift === '2' || shift === '3') {
@@ -1065,11 +1427,14 @@ function displayMainMenu() {
 }
 
 async function refreshAllData() {
-    alert("1. Début rafraîchissement");
+    showSnackbar("🔄 Synchronisation en cours...");
     await loadSharedAgents();
-    alert("2. Agents chargés");
     await loadSharedPlanning();
-    alert("3. Planning chargé");
+    await loadSharedConges();
+    await loadSharedSoldes();
+    await loadSharedPanique();
+    await loadSharedHabillement();
+    await loadSharedAvertissements();
     showSnackbar("✅ Données mises à jour");
     window.location.reload();
 }
@@ -1128,6 +1493,9 @@ function showAgentPlanningSimple(agentCode, month, year) {
     let rows = [];
     for (let d = 1; d <= daysInMonth; d++) {
         const dateStr = `${year}-${month.toString().padStart(2,'0')}-${d.toString().padStart(2,'0')}`;
+        
+        // Après avoir construit dateStr, ajoutez :
+console.log("DEBUG - Jour:", d, "DateStr:", dateStr, "Shift:", shift);
         const date = new Date(year, month-1, d);
         const dayName = JOURS_FRANCAIS[date.getDay()];
         const shift = getShiftForAgent(agentCode, dateStr);
@@ -1466,7 +1834,7 @@ function getJoursPrisDansAnnee(agentCode, annee) {
     return total;
 }
 
-function recalculerSoldesAgent(agentCode) {
+async function recalculerSoldesAgent(agentCode) {
     const agent = agents.find(a => a.code === agentCode);
     if (!agent || !agent.date_entree) return;
     const anneeEntree = new Date(agent.date_entree).getFullYear();
@@ -1491,9 +1859,10 @@ function recalculerSoldesAgent(agentCode) {
         reportPrecedent = reste;
     }
     saveData();
+    await saveSharedSoldes();
 }
 
-function setPrisManuel(agentCode, annee, nouvelleValeur) {
+async function setPrisManuel(agentCode, annee, nouvelleValeur) {
     let pris = parseFloat(nouvelleValeur);
     if (isNaN(pris)) pris = 0;
     let existant = soldesConges.find(s => s.agentCode === agentCode && s.annee === annee);
@@ -1517,6 +1886,7 @@ function setPrisManuel(agentCode, annee, nouvelleValeur) {
         reportPrecedent = reste;
     }
     saveData();
+    await saveSharedSoldes();
 }
 
 function afficherSoldesAgent(agentCode, anneeParam = null) {
@@ -2067,6 +2437,7 @@ function generateGlobalPlanning() {
 }
 
 function showGlobalPlanningWithTotals(month, year, groupFilter = 'ALL') {
+  alert("planningData au moment de l'affichage : " + JSON.stringify(planningData));
 alert("Génération du planning, planningData contient " + Object.keys(planningData).length + " mois"); 
     let actifs = agents.filter(a => a.statut === 'actif');
     if (currentUser.role === 'CP') {
@@ -2090,12 +2461,15 @@ alert("Génération du planning, planningData contient " + Object.keys(planningD
             <td style="text-align:center; padding:6px;">${agent.groupe}</td>`;
         for (let d = 1; d <= daysInMonth; d++) {
             const dateStr = `${year}-${month.toString().padStart(2,'0')}-${d.toString().padStart(2,'0')}`;
+          
+console.log(`Affichage - Agent: ${agent.code}, Date: ${dateStr}, Shift: ${getShiftForAgent(agent.code, dateStr)}`); 
             const date = new Date(year, month-1, d);
             const shiftDisplay = getShiftDisplay(agent.code, dateStr);
             const shift = getShiftForAgent(agent.code, dateStr);
             const color = SHIFT_COLORS[shift] || '#7f8c8d';
             const isHoliday = isHolidayDate(date);
             let additionalStyle = isHoliday && (shift === '1' || shift === '2' || shift === '3') ? 'border: 2px solid #f39c12;' : '';
+            
             html += `<td style="background-color:${color}; color:white; text-align:center; padding:4px; ${additionalStyle}" title="${shiftDisplay}">${shiftDisplay}</td>`;
         }
         html += `<td style="text-align:center; font-weight:bold; color:#27ae60;">${stats.travaillesNormaux}</td>
@@ -2295,19 +2669,16 @@ function filterShiftAgentList() {
     const select = document.getElementById('shiftAgent');
     Array.from(select.options).forEach(opt => opt.style.display = opt.text.toLowerCase().includes(term) ? '' : 'none');
 }
-
-  async function applyShiftModification() {
-    alert("1. Modification shift");
-
-    await saveSharedPlanning();
-    alert("2. Planning sauvegardé");
-
+async function applyShiftModification() {
     const agentCode = document.getElementById('shiftAgent').value;
-    const dateStr = document.getElementById('shiftDate').value;
+    const dateStrRaw = document.getElementById('shiftDate').value;
     const newShift = document.getElementById('newShift').value;
     const comment = document.getElementById('shiftComment').value;
-    if (!agentCode || !dateStr) { alert("⚠️ Agent et date requis"); return; }
+    if (!agentCode || !dateStrRaw) { alert("⚠️ Agent et date requis"); return; }
     if (!canAccessAgent(agentCode)) { alert("⚠️ Vous n'avez pas accès à cet agent"); return; }
+    
+    // ✅ CORRECTION ICI
+    const dateStr = formatDateUTC(dateStrRaw);
     
     const oldShift = getShiftForAgent(agentCode, dateStr);
     const monthKey = dateStr.substring(0,7);
@@ -2315,9 +2686,7 @@ function filterShiftAgentList() {
     if (!planningData[monthKey][agentCode]) planningData[monthKey][agentCode] = {};
     planningData[monthKey][agentCode][dateStr] = { shift: newShift, type: 'modification', comment };
     saveData();
-    
-  await saveSharedPlanning();
-    alert("2. Planning sauvegardé");
+    await saveSharedPlanning(); 
     
     addNotification('shift_modification', {
         action: 'update', agentCode: agentCode,
@@ -2520,7 +2889,9 @@ function filterLeavesListGrouped() {
         let current = new Date(startDate);
         const end = new Date(endDate);
         while (current <= end) {
-            const dateStr = current.toISOString().split('T')[0];
+          
+
+const dateStr = formatDateUTC(current); 
             const monthKey = dateStr.substring(0,7);
             if (planningData[monthKey]?.[agentCode]?.[dateStr]) delete planningData[monthKey][agentCode][dateStr];
             for (const joker of agents.filter(a => a.groupe === 'J')) {
@@ -2538,8 +2909,12 @@ function filterLeavesListGrouped() {
         alert("✅ Congés et remplacements supprimés !");
         // Supprimer du cloud
 await deleteLeaveFromCloud(agentCode, startDate, endDate);
+// Supprimer la période de congesList
+congesList = congesList.filter(c => !(c.agentCode === agentCode && c.startDate === startDate && c.endDate === endDate));
+await saveSharedConges();
         
         showLeavesList();
+        
     }
 }
 
@@ -2667,8 +3042,8 @@ function filterPanicAgentList() {
     const select = document.getElementById('panicAgent');
     Array.from(select.options).forEach(opt => opt.style.display = opt.text.toLowerCase().includes(term) ? '' : 'none');
 }
-
-function savePanic() {
+async function savePanic() {
+  alert ("savePanic début");
     const agentCode = document.getElementById('panicAgent').value;
     const code = document.getElementById('panicCode').value.toUpperCase();
     const poste = document.getElementById('panicPoste').value;
@@ -2686,6 +3061,9 @@ function savePanic() {
         panicCodes.push({ agent_code: agentCode, code, poste, comment, created_at: new Date().toISOString() });
     }
     saveData();
+    alert("avant saveSharedPanique");
+    await saveSharedPanique();  // <-- AJOUTER CETTE LIGNE
+    
     addNotification('panic_add', { action: existing ? 'update' : 'create', agentCode: agentCode, agentName: `${agents.find(a => a.code === agentCode)?.nom || agentCode} ${agents.find(a => a.code === agentCode)?.prenom || ''}`, code: code });
     alert(`✅ Code panique enregistré pour ${agentCode}`);
     showPanicList();
@@ -2745,17 +3123,18 @@ function searchPanicCode() {
     document.getElementById('searchPanicResult').innerHTML = results.length ? generatePanicList(results) : '<p style="text-align:center; padding:20px;">Aucun code panique trouvé</p>';
 }
 
-function deletePanic(agentCode) {
+async function deletePanic(agentCode) {
     if (!checkPassword("Suppression code panique")) return;
     if (confirm(`Supprimer le code panique de ${agentCode} ?`)) {
         panicCodes = panicCodes.filter(p => p.agent_code !== agentCode);
         saveData();
+        await saveSharedPanique();  // <-- AJOUTER CETTE LIGNE
         alert("✅ Code panique supprimé!");
         showPanicList();
     }
 }
 
-function modifyPanic(agentCode) {
+async function modifyPanic(agentCode) {
     const panic = panicCodes.find(p => p.agent_code === agentCode);
     if (!panic) return;
     const newCode = prompt("Nouveau code (ex: 1234) :", panic.code);
@@ -2766,6 +3145,7 @@ function modifyPanic(agentCode) {
     if (newComment !== null) panic.comment = newComment;
     panic.updated_at = new Date().toISOString();
     saveData();
+    await saveSharedPanique();  // <-- AJOUTER CETTE LIGNE
     alert("✅ Code panique modifié");
     showPanicList();
 }
@@ -3033,27 +3413,39 @@ function filterUniformAgentList() {
     const select = document.getElementById('uniformAgent');
     Array.from(select.options).forEach(opt => opt.style.display = opt.text.toLowerCase().includes(term) ? '' : 'none');
 }
-
 function saveUniform() {
     const agentCode = document.getElementById('uniformAgent').value;
-    const date = document.getElementById('uniformDate').value;
+    const dateRaw = document.getElementById('uniformDate').value;
     const comment = document.getElementById('uniformComment').value;
-    const articles = ['chemise', 'pantalon', 'tricot', 'ceinture', 'chaussures', 'cravate', 'veste', 'parka'].filter(a => document.getElementById(`uniform_${a}`).checked).map(a => a.charAt(0).toUpperCase() + a.slice(1));
+    const articles = ['chemise', 'pantalon', 'tricot', 'ceinture', 'chaussures', 'cravate', 'veste', 'parka']
+        .filter(a => document.getElementById(`uniform_${a}`).checked)
+        .map(a => a.charAt(0).toUpperCase() + a.slice(1));
+    
     if (!agentCode) { alert("⚠️ Sélectionnez un agent"); return; }
     if (!canAccessAgent(agentCode)) { alert("⚠️ Vous n'avez pas accès à cet agent"); return; }
     if (articles.length === 0) { alert("⚠️ Sélectionnez au moins un article"); return; }
+    
+    // ✅ Utilisation de formatDateUTC
+    const date = formatDateUTC(document.getElementById('uniformDate').value);
+const now = formatDateUTC(new Date());
     
     const existing = uniforms.find(u => u.agentCode === agentCode);
     if (existing) {
         existing.date = date;
         existing.comment = comment;
         existing.articles = articles;
-        existing.lastUpdated = new Date().toISOString();
+        existing.lastUpdated = now;
     } else {
-        uniforms.push({ agentCode, date, comment, articles, lastUpdated: new Date().toISOString() });
+        uniforms.push({ agentCode, date, comment, articles, lastUpdated: now });
     }
+    
     saveData();
-    addNotification('uniform_add', { action: existing ? 'update' : 'create', agentCode: agentCode, agentName: `${agents.find(a => a.code === agentCode)?.nom || agentCode} ${agents.find(a => a.code === agentCode)?.prenom || ''}`, articles: articles.join(', ') });
+    addNotification('uniform_add', { 
+        action: existing ? 'update' : 'create', 
+        agentCode, 
+        agentName: `${agents.find(a => a.code === agentCode)?.nom || agentCode} ${agents.find(a => a.code === agentCode)?.prenom || ''}`, 
+        articles: articles.join(', ') 
+    });
     alert(`✅ Habillement enregistré pour ${agentCode} (${articles.length} articles)`);
     showUniformReport();
 }
@@ -3092,11 +3484,12 @@ function filterUniformReport() {
     document.getElementById('uniformReportContainer').innerHTML = generateUniformReport(filtered);
 }
 
-function deleteUniform(agentCode) {
+async function deleteUniform(agentCode) {
     if (!checkPassword("Suppression habillement")) return;
     if (confirm(`Supprimer l'enregistrement d'habillement de ${agentCode} ?`)) {
         uniforms = uniforms.filter(u => u.agentCode !== agentCode);
         saveData();
+        await saveSharedHabillement;
         alert("✅ Habillement supprimé!");
         showUniformReport();
     }
@@ -3105,11 +3498,18 @@ function deleteUniform(agentCode) {
 function modifyUniform(agentCode) {
     const uniform = uniforms.find(u => u.agentCode === agentCode);
     if (!uniform) return;
+    
     const newDate = prompt("Nouvelle date (AAAA-MM-JJ) :", uniform.date);
-    if (newDate && newDate.match(/^\d{4}-\d{2}-\d{2}$/)) uniform.date = newDate;
+    if (newDate && newDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
+        // ✅ Normalisation avec formatDateUTC
+uniform.date = formatDateUTC(newDate);
+uniform.lastUpdated = formatDateUTC(new Date());
+    }
+    
     const newComment = prompt("Nouveau commentaire :", uniform.comment || "");
     if (newComment !== null) uniform.comment = newComment;
-    uniform.lastUpdated = new Date().toISOString();
+    
+    uniform.lastUpdated = formatDateUTC(new Date());
     saveData();
     alert("✅ Habillement modifié");
     showUniformReport();
@@ -3176,7 +3576,7 @@ function filterWarningAgentList() {
     Array.from(select.options).forEach(opt => opt.style.display = opt.text.toLowerCase().includes(term) ? '' : 'none');
 }
 
-function saveWarning() {
+async function saveWarning() {
     const agentCode = document.getElementById('warningAgent').value;
     const type = document.getElementById('warningType').value;
     const date = document.getElementById('warningDate').value;
@@ -3186,6 +3586,7 @@ function saveWarning() {
     
     warnings.push({ id: Date.now(), agent_code: agentCode, type, date, description, status: 'active', created_at: new Date().toISOString() });
     saveData();
+    await saveSharedAvertissements;
     addNotification('warning_add', { action: 'create', agentCode: agentCode, agentName: `${agents.find(a => a.code === agentCode)?.nom || agentCode} ${agents.find(a => a.code === agentCode)?.prenom || ''}`, warningType: type, description: description });
     alert(`✅ Avertissement enregistré pour ${agentCode}`);
     showWarningsList();
@@ -3285,28 +3686,30 @@ function showWarningsStats() {
     document.getElementById('main-content').innerHTML = html;
 }
 
-function toggleWarningStatus(id) {
+async function toggleWarningStatus(id) {
     const idx = warnings.findIndex(w => w.id === id);
     if (idx !== -1) {
         warnings[idx].status = warnings[idx].status === 'active' ? 'archived' : 'active';
         warnings[idx].updated_at = new Date().toISOString();
         saveData();
+       await saveSharedAvertissements; 
         showSnackbar(warnings[idx].status === 'active' ? "✅ Avertissement réactivé" : "📁 Avertissement archivé");
         showWarningsList();
     }
 }
 
-function deleteWarning(id) {
+async function deleteWarning(id) {
     if (!checkPassword("Suppression avertissement")) return;
     if (confirm("Supprimer définitivement cet avertissement ?")) {
         warnings = warnings.filter(w => w.id !== id);
         saveData();
+       await saveSharedAvertissements; 
         alert("✅ Avertissement supprimé!");
         showWarningsList();
     }
 }
 
-function modifyWarning(id) {
+async function modifyWarning(id) {
     const warning = warnings.find(w => w.id === id);
     if (!warning) return;
     const newType = prompt("Nouveau type (ORAL, ECRIT, MISE_A_PIED) :", warning.type);
@@ -3317,6 +3720,7 @@ function modifyWarning(id) {
     if (newDate && newDate.match(/^\d{4}-\d{2}-\d{2}$/)) warning.date = newDate;
     warning.updated_at = new Date().toISOString();
     saveData();
+    await saveSharedAvertissements;
     alert("✅ Avertissement modifié");
     showWarningsList();
 }
@@ -3955,26 +4359,9 @@ function resetUserPassword(id) {
     } else if (newPassword) { alert("❌ Le mot de passe doit contenir au moins 4 caractères"); }
 }
 // ==================== PARTIE 18 : INITIALISATION (tout à la fin) ====================
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     console.log("🚀 SGA v8.0 - CleanCo - Démarrage...");
-    loadData();
-   function nettoyerPlanningData() {
-    let modifie = false;
-    for (const [monthKey, agentsData] of Object.entries(planningData)) {
-        for (const [agentCode, days] of Object.entries(agentsData)) {
-            for (const [dateStr, shiftData] of Object.entries(days)) {
-                if (!dateStr || dateStr === "undefined") {
-                    delete planningData[monthKey][agentCode][dateStr];
-                    modifie = true;
-                }
-            }
-        }
-    }
-    if (modifie) {
-        localStorage.setItem('sga_planning', JSON.stringify(planningData));
-        console.log("PlanningData nettoyé des dates undefined");
-    }
-} 
+    await loadData();  // <- maintenant autorisé car la fonction callback est async
     loadNotifications();
     const savedUser = localStorage.getItem('sga_current_user');
     if (savedUser) {
