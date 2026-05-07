@@ -2,7 +2,7 @@
 console.log("🚀 SGA v8.0 - Application chargée");
 
 // ==================== PARTIE 1 : CONSTANTES & CONFIGURATION ====================
-const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwtO7nDcG2FnLEFsiCyKcM9hgH76m1y0WpfUVaXIaNrCIlT34E0xj_x4Tx_UsqatMTxUA/exec";
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx11EZOys0LGpNLmjXblnIxGx4sRt9AeDCWVM1W0QUX6YC_8oT_SaZWKSywVdxMP1O1pA/exec";
 const SHEET_BEST_BASE_URL = APPS_SCRIPT_URL;
 
 const JOURS_FRANCAIS = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
@@ -190,26 +190,27 @@ async function saveSharedPlanning() {
 async function loadSharedSoldes() {
     if (!APPS_SCRIPT_URL) return false;
     try {
-        const response = await fetch(`${APPS_SCRIPT_URL}?tab=SoldesConges`);
-        if (!response.ok) throw new Error("Erreur réseau");
+        const response = await fetch(`${APPS_SCRIPT_URL}?tab=Soldes`);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const cloudSoldes = await response.json();
-        
-        soldesConges = cloudSoldes.map(s => ({
-            agentCode: s.AgentCode,
-            annee: s.Annee,
-            droitAnnuel: s.DroitAnnuel,
-            reportAnt: s.ReportAnt,
-            totalDispo: s.TotalDispo,
-            pris: s.Pris,
-            reste: s.Reste
-        }));
-        
-        localStorage.setItem('sga_soldes_conges', JSON.stringify(soldesConges));
-        console.log(`✅ Soldes chargés (${soldesConges.length} entrées)`);
-        if (typeof showSnackbar === 'function') showSnackbar(`✅ Soldes synchronisés`);
+        if (Array.isArray(cloudSoldes) && cloudSoldes.length > 0) {
+            soldesConges = cloudSoldes.map(s => ({
+                agentCode: s.AgentCode,
+                annee: s.Annee,
+                droitAnnuel: s.DroitAnnuel,
+                reportAnt: s.ReportAnt,
+                totalDispo: s.TotalDispo,
+                pris: s.Pris,
+                reste: s.Reste
+            }));
+            localStorage.setItem('sga_soldes_conges', JSON.stringify(soldesConges));
+            console.log(`✅ Soldes chargés (${soldesConges.length})`);
+        } else {
+            console.log("Aucun solde cloud → conservation locale");
+        }
         return true;
-    } catch (erreur) {
-        console.error("❌ Erreur chargement soldes", erreur);
+    } catch (err) {
+        console.error("❌ Erreur chargement soldes", err);
         return false;
     }
 }
@@ -250,9 +251,9 @@ async function loadSharedPanique() {
     if (!APPS_SCRIPT_URL) return false;
     try {
         const response = await fetch(`${APPS_SCRIPT_URL}?tab=Panique`);
-        if (!response.ok) throw new Error("Erreur réseau");
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const cloudPanique = await response.json();
-        if (Array.isArray(cloudPanique)) {
+        if (Array.isArray(cloudPanique) && cloudPanique.length > 0) {
             panicCodes = cloudPanique.map(p => ({
                 agent_code: p.AgentCode,
                 code: p.Code,
@@ -263,7 +264,8 @@ async function loadSharedPanique() {
             localStorage.setItem('sga_panic_codes', JSON.stringify(panicCodes));
             console.log(`✅ Codes panique chargés (${panicCodes.length})`);
         } else {
-            panicCodes = [];
+            console.log("Aucun code panique dans le cloud → conservation des données locales");
+            // panicCodes reste inchangé
         }
         return true;
     } catch (err) {
@@ -324,9 +326,9 @@ async function loadSharedHabillement() {
     if (!APPS_SCRIPT_URL) return false;
     try {
         const response = await fetch(`${APPS_SCRIPT_URL}?tab=Habillement`);
-        if (!response.ok) throw new Error("Erreur réseau");
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const cloudHabillement = await response.json();
-        if (Array.isArray(cloudHabillement)) {
+        if (Array.isArray(cloudHabillement) && cloudHabillement.length > 0) {
             uniforms = cloudHabillement.map(u => ({
                 agentCode: u.AgentCode,
                 date: u.Date,
@@ -337,7 +339,7 @@ async function loadSharedHabillement() {
             localStorage.setItem('sga_uniforms', JSON.stringify(uniforms));
             console.log(`✅ Habillement chargé (${uniforms.length})`);
         } else {
-            uniforms = [];
+            console.log("Aucune donnée habillement dans le cloud → conservation locale");
         }
         return true;
     } catch (err) {
@@ -375,22 +377,26 @@ async function loadSharedAvertissements() {
     if (!APPS_SCRIPT_URL) return false;
     try {
         const response = await fetch(`${APPS_SCRIPT_URL}?tab=Avertissements`);
-        if (!response.ok) throw new Error("Erreur réseau");
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const cloudAvertissements = await response.json();
-        warnings = cloudAvertissements.map(w => ({
-            id: w.Id,
-            agent_code: w.AgentCode,
-            type: w.Type,
-            date: w.Date,
-            description: w.Description,
-            status: w.Statut || 'active',
-            created_at: new Date().toISOString()
-        }));
-        localStorage.setItem('sga_warnings', JSON.stringify(warnings));
-        console.log(`✅ Avertissements chargés (${warnings.length})`);
+        if (Array.isArray(cloudAvertissements) && cloudAvertissements.length > 0) {
+            warnings = cloudAvertissements.map(w => ({
+                id: w.Id,
+                agent_code: w.AgentCode,
+                type: w.Type,
+                date: w.Date,
+                description: w.Description,
+                status: w.Statut || 'active',
+                created_at: new Date().toISOString()
+            }));
+            localStorage.setItem('sga_warnings', JSON.stringify(warnings));
+            console.log(`✅ Avertissements chargés (${warnings.length})`);
+        } else {
+            console.log("Aucun avertissement dans le cloud → conservation locale");
+        }
         return true;
-    } catch (erreur) {
-        console.error("❌ Erreur chargement avertissements", erreur);
+    } catch (err) {
+        console.error("❌ Erreur chargement avertissements", err);
         return false;
     }
 }
@@ -615,11 +621,15 @@ function saveData() {
     // Synchronisation cloud (sans attendre pour ne pas bloquer l'UI)
     saveSharedAgents();
     saveSharedPlanning();
+    
+    if (panicCodes.length > 0) saveSharedPanique();
+    if (uniforms.length > 0) saveSharedHabillement();
+    if (warnings.length > 0) saveSharedAvertissements();
     saveSharedPanique();      // doit exister
     saveSharedHabillement();  // doit exister
     saveSharedAvertissements();// doit exister
-    
-    console.log("💾 Données sauvegardées localement et cloud (lancé)");
+
+    console.log("💾 Sauvegarde locale + cloud lancée");
 }
 
 async function loadData() {
@@ -703,6 +713,10 @@ function checkPassword(action) {
 
 function showSnackbar(msg) {
     const snackbar = document.getElementById('snackbar');
+    if (!snackbar) {
+        console.log("Snackbar non disponible :", msg);
+        return;
+    }
     snackbar.textContent = msg;
     snackbar.className = "show";
     setTimeout(() => { snackbar.className = ""; }, 3000);
