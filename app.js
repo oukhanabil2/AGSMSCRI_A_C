@@ -161,13 +161,14 @@ async function saveSharedPlanning() {
                 for (const [dateStr, shiftData] of Object.entries(days)) {
                     // ✅ Utiliser formatDateUTC au lieu de new Date()
                     let cleanDate = formatDateUTC(dateStr);
-                    dataToSend.push({
-                        AgentCode: agentCode,
-                        Date: cleanDate,
-                        Shift: shiftData.shift,
-                        Type: shiftData.type || 'theorique',
-                        Commentaire: shiftData.comment || ''
-                    });
+          dataToSend.push({
+    AgentCode: agentCode,
+    Date: cleanDate,
+    Shift: shiftData.shift,
+    Type: shiftData.type || 'theorique',
+    Commentaire: shiftData.comment || '',
+    Replaces: shiftData.replaces || ''   // ← Ajout essentiel
+});
                 }
             }
         }
@@ -506,10 +507,11 @@ async function loadSharedPlanning() {
             if (!newPlanningData[monthKey]) newPlanningData[monthKey] = {};
             if (!newPlanningData[monthKey][agentCode]) newPlanningData[monthKey][agentCode] = {};
             newPlanningData[monthKey][agentCode][cleanDate] = {
-                shift: item.Shift,
-                type: item.Type || 'theorique',
-                comment: item.Commentaire || ''
-            };
+    shift: item.Shift,
+    type: item.Type || 'theorique',
+    comment: item.Commentaire || '',
+    replaces: item.Replaces || null   // ← Ajout
+};
         }
         planningData = newPlanningData;
         localStorage.setItem('sga_planning', JSON.stringify(planningData));
@@ -928,21 +930,31 @@ function getJokerShift(jokerCode, dateStr) {
 function getShiftForAgent(agentCode, dateStr) {
     let cleanDate = formatDateUTC(dateStr);
     const monthKey = cleanDate.substring(0, 7);
-    // Vérifier l'existence d'une entrée manuelle ou de remplacement
+    
+    // 1. Vérifier une entrée manuelle (shift modifié ou remplacement)
     const existing = planningData[monthKey]?.[agentCode]?.[cleanDate];
     if (existing && existing.shift) return existing.shift;
 
     const agent = agents.find(a => a.code === agentCode);
     if (!agent || agent.statut !== 'actif') return '-';
 
+    // 2. Cas des jokers : lecture directe du champ 'replaces'
     if (agent.groupe === 'J') {
-        const replacedAgent = findReplacedAgent(agentCode, cleanDate);
-        if (replacedAgent) {
-            // Le joker prend le shift théorique de l'agent absent
-            return getTheoreticalShiftWithoutAbsence(replacedAgent.code, cleanDate);
+        // Lire le code de l'agent remplacé depuis l'entrée du joker (persisté)
+        const jokerEntry = planningData[monthKey]?.[agentCode]?.[cleanDate];
+        let replacedAgentCode = jokerEntry?.replaces;
+        if (!replacedAgentCode) {
+            // Fallback : chercher via findReplacedAgent (pour les anciennes données)
+            const replaced = findReplacedAgent(agentCode, cleanDate);
+            replacedAgentCode = replaced?.code;
         }
-        return 'R'; // Aucun remplacement → repos
+        if (replacedAgentCode) {
+            return getTheoreticalShiftWithoutAbsence(replacedAgentCode, cleanDate);
+        }
+        return 'R';
     }
+
+    // 3. Pour les autres groupes, calcul théorique
     return getTheoreticalShift(agentCode, cleanDate);
 }
 
@@ -1070,19 +1082,21 @@ await saveSharedConges();
 function calculateAgentStats(agentCode, month, year) {
     const daysInMonth = new Date(year, month, 0).getDate();
     let travaillesNormaux = 0, feriesTravailles = 0, conges = 0, maladie = 0, autre = 0, repos = 0;
-    
     for (let day = 1; day <= daysInMonth; day++) {
         const dateStr = `${year}-${month.toString().padStart(2,'0')}-${day.toString().padStart(2,'0')}`;
         const date = new Date(year, month-1, day);
-        // ICI : utiliser getShiftForAgent (qui gère les remplacements)
-        const shift = getShiftForAgent(agentCode, dateStr);
-
-if (agentCode === "code_du_joker") console.log("Date", dateStr, "Shift", shift);
-        const isHoliday = isHolidayDate(date);
-        
+        const shiftDisplay = getShiftDisplay(agentCode, dateStr);
+        // Convertir en chaîne et extraire le premier caractère significatif
+        let shiftStr = String(shiftDisplay || '');
+        // Si la chaîne commence par une icône, prendre le caractère suivant
+        let shift = shiftStr.charAt(0);
+        if (shift === '🌅' || shift === '☀️' || shift === '🌙') {
+            shift = shiftStr.length > 1 ? shiftStr.charAt(1) : '';
+        }
+        // Parfois le shift est comme "C" ou "R" ou "1", etc.
         if (shift === '1' || shift === '2' || shift === '3') {
             travaillesNormaux++;
-            if (isHoliday) feriesTravailles++;
+            if (isHolidayDate(date)) feriesTravailles++;
         } else if (shift === 'C') conges++;
         else if (shift === 'M') maladie++;
         else if (shift === 'A') autre++;
@@ -4543,6 +4557,14 @@ document.addEventListener('DOMContentLoaded', async () => {
         showLogin();
     }
 });
+function refreshAllTotals() {
+    // Recalculer les soldes pour tous les agents concernés
+    // Cela va forcer une remise à jour des statistiques
+    console.log("Recalcul des totaux...");
+    // Si vous avez une fonction de recalcul global, appelez-la ici.
+    // Sinon, on peut simplement recharger la vue actuelle.
+    // Mais pour l'instant, on laisse vide, le problème viendra d'ailleurs.
+}
 
 // Rendre les fonctions globales nécessaires
 window.showNotificationsPanel = showNotificationsPanel;
