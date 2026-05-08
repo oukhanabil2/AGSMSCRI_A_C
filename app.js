@@ -2,7 +2,7 @@
 console.log("🚀 SGA v8.0 - Application chargée");
 
 // ==================== PARTIE 1 : CONSTANTES & CONFIGURATION ====================
-const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx11EZOys0LGpNLmjXblnIxGx4sRt9AeDCWVM1W0QUX6YC_8oT_SaZWKSywVdxMP1O1pA/exec";
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwCQK1qbKqfTC6knBPDzkoMuvNYNwkAweCyTkM9mbK32Fr7C6GSFB_xJjTSGTrV3nEVqQ/exec";
 const SHEET_BEST_BASE_URL = APPS_SCRIPT_URL;
 
 const JOURS_FRANCAIS = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
@@ -705,9 +705,10 @@ async function loadData() {
     // 2. Synchronisation cloud en priorité (écrase les données locales si différent)
     await loadSharedAgents();
     await loadSharedPlanning();
+    await loadSharedUsers();
     await loadSharedPanique();       // à définir
     await loadSharedHabillement();
-    await loadSharedUsers();
+    
     // à définir
     await loadSharedAvertissements();// à définir
     // Optionnel : charger aussi radios et notifications si vous avez des feuilles
