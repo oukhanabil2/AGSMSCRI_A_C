@@ -102,7 +102,7 @@ async function loadSharedAgents() {
         localStorage.setItem('sga_agents', JSON.stringify(agents));
         console.log(`✅ ${agents.length} agents chargés`);
       
-alert("Nombre d'agents reçus : " + cloudAgents.length); // <-- AJOUTEZ CETTE LIGNE
+// alert("Nombre d'agents reçus : " + cloudAgents.length); // <-- AJOUTEZ CETTE LIGNE
         
         if (typeof showSnackbar === 'function') showSnackbar(`✅ ${agents.length} agents synchronisés`);
         return true;
@@ -115,7 +115,7 @@ alert("Nombre d'agents reçus : " + cloudAgents.length); // <-- AJOUTEZ CETTE LI
 
 async function saveSharedAgents() {
  
-    alert("saveSharedPanique appelée, nombre de codes = " + panicCodes.length);
+   //  alert("saveSharedPanique appelée, nombre de codes = " + panicCodes.length);
     
  
     if (!APPS_SCRIPT_URL) return;
@@ -227,22 +227,16 @@ async function saveSharedSoldes() {
             Pris: s.pris,
             Reste: s.reste
         }));
-        
-        const response = await fetch(`${APPS_SCRIPT_URL}?tab=SoldesConges&replace=true`, {
+        const response = await fetch(`${APPS_SCRIPT_URL}?tab=Soldes&replace=true`, {
             method: 'POST',
             headers: { 'Content-Type': 'text/plain' },
             body: JSON.stringify(dataToSend)
         });
         const text = await response.text();
-        if (text === "OK") {
-            console.log("✅ Soldes sauvegardés");
-            if (typeof showSnackbar === 'function') showSnackbar("✅ Soldes synchronisés");
-        } else {
-            throw new Error(text);
-        }
+        if (text !== "OK") throw new Error(text);
+        console.log("✅ Soldes sauvegardés");
     } catch (err) {
         console.error("❌ Erreur sauvegarde soldes", err);
-        if (typeof showSnackbar === 'function') showSnackbar("❌ Erreur synchronisation soldes");
     }
 }
 
@@ -304,7 +298,7 @@ async function saveSharedPanique() {
             Poste: p.poste || '',
             Commentaire: p.comment || ''
         }));
-        console.log("Envoi Panique:", dataToSend);
+       //   console.log("Envoi Panique:", dataToSend);
         const response = await fetch(`${APPS_SCRIPT_URL}?tab=Panique&replace=true`, {
             method: 'POST',
             headers: { 'Content-Type': 'text/plain' },
@@ -339,7 +333,7 @@ async function loadSharedHabillement() {
             localStorage.setItem('sga_uniforms', JSON.stringify(uniforms));
             console.log(`✅ Habillement chargé (${uniforms.length})`);
         } else {
-            console.log("Aucune donnée habillement dans le cloud → conservation locale");
+        //  console.log("Aucune donnée habillement dans le cloud → conservation locale");
         }
         return true;
     } catch (err) {
@@ -389,10 +383,10 @@ async function loadSharedAvertissements() {
                 status: w.Statut || 'active',
                 created_at: new Date().toISOString()
             }));
-            localStorage.setItem('sga_warnings', JSON.stringify(warnings));
-            console.log(`✅ Avertissements chargés (${warnings.length})`);
+            localStorage.setItem('sga_warnings', JSON.stringify(warnings)) 
+     // console.log(`✅ Avertissements chargés (${warnings.length})`);
         } else {
-            console.log("Aucun avertissement dans le cloud → conservation locale");
+         //    console.log("Aucun avertissement dans le cloud → conservation locale");
         }
         return true;
     } catch (err) {
@@ -556,11 +550,11 @@ async function loadSharedLeaves() {
             });
             localStorage.removeItem('sga_planning');
 loadSharedPlanning().then(() => location.reload());
-            console.log(`✅ ${cloudLeaves.length} congés chargés du cloud (${count} jours)`);
+         //   console.log(`✅ ${cloudLeaves.length} congés chargés du cloud (${count} jours)`);
             return true;
         }
     } catch (erreur) {
-        console.log("⚠️ Cloud congés indisponible", erreur);
+      //  console.log("⚠️ Cloud congés indisponible", erreur);
     }
     return false;
 }
@@ -582,7 +576,7 @@ async function saveLeaveToCloud(agentCode, startDate, endDate, type, comment, jo
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(newLeave)
         });
-        console.log("✅ Congé sauvegardé dans le cloud");
+       //  console.log("✅ Congé sauvegardé dans le cloud");
     } catch (erreur) {
         console.error("❌ Erreur sauvegarde congé", erreur);
     }
@@ -596,7 +590,7 @@ async function deleteLeaveFromCloud(agentCode, startDate, endDate) {
         const toDelete = allLeaves.find(l => l.Agent === agentCode && l.DateDebut === startDate && l.DateFin === endDate);
         if (toDelete && toDelete.id) {
             await fetch(`${SHEET_BEST_BASE_URL}/${toDelete.id}`, { method: 'DELETE' });
-            console.log("✅ Congé supprimé du cloud");
+          //  console.log("✅ Congé supprimé du cloud");
         }
     } catch (erreur) {
         console.error("❌ Erreur suppression congé", erreur);
@@ -648,6 +642,7 @@ async function loadData() {
     replacementNotifications = JSON.parse(localStorage.getItem('sga_notifications') || '[]');
     notifications = JSON.parse(localStorage.getItem('sga_sys_notifications') || '[]');
     soldesConges = JSON.parse(localStorage.getItem('sga_soldes_conges') || '[]');
+    if (soldesConges.length > 0) saveSharedSoldes();
     
     if (holidays.length === 0) initializeHolidays();
     
@@ -880,16 +875,27 @@ function getTheoreticalShift(agentCode, dateStr) {
 }
 
 function findReplacedAgent(jokerCode, dateStr) {
-    for (const agent of agents) {
-        if (agent.code === jokerCode || agent.groupe === 'J') continue;
-        const shift = getShiftForAgent(agent.code, dateStr);
-        if (['C', 'M', 'A'].includes(shift)) {
-            const monthKey = dateStr.substring(0,7);
-            const jokerAssignment = planningData[monthKey]?.[jokerCode]?.[dateStr];
-            if (jokerAssignment?.comment?.includes(agent.code)) return agent;
-            const notification = replacementNotifications.find(n => n.joker === jokerCode && n.date_absence === dateStr && n.agent_absent === agent.code);
-            if (notification) return agent;
+    let cleanDate = formatDateUTC(dateStr);
+    const monthKey = cleanDate.substring(0, 7);
+    const jokerEntry = planningData[monthKey]?.[jokerCode]?.[cleanDate];
+    
+    // 1. Priorité au champ explicite "replaces"
+    if (jokerEntry && jokerEntry.replaces) {
+        const replacedAgent = agents.find(a => a.code === jokerEntry.replaces);
+        if (replacedAgent) return replacedAgent;
+    }
+    // 2. Sinon, essayer via le commentaire (compatible avec anciennes données)
+    if (jokerEntry && jokerEntry.comment) {
+        const match = jokerEntry.comment.match(/Remplace (\w+)/);
+        if (match && match[1]) {
+            const replacedAgent = agents.find(a => a.code === match[1]);
+            if (replacedAgent) return replacedAgent;
         }
+    }
+    // 3. Sinon, chercher dans replacementNotifications
+    const notif = replacementNotifications.find(n => n.joker === jokerCode && n.date_debut <= cleanDate && n.date_fin >= cleanDate);
+    if (notif && notif.agent_absent) {
+        return agents.find(a => a.code === notif.agent_absent);
     }
     return null;
 }
@@ -917,39 +923,27 @@ function getTheoreticalShiftWithoutAbsence(agentCode, dateStr) {
 }
 
 function getJokerShift(jokerCode, dateStr) {
-    const replacedAgent = findReplacedAgent(jokerCode, dateStr);
-    if (replacedAgent) return getTheoreticalShiftWithoutAbsence(replacedAgent.code, dateStr);
-    return 'R';
+    return getShiftForAgent(jokerCode, dateStr);
 }
 function getShiftForAgent(agentCode, dateStr) {
-    // Normaliser la date d'entrée (venant de l'affichage)
-    let cleanDateStr = dateStr;
-    if (cleanDateStr.includes('T')) {
-        cleanDateStr = cleanDateStr.split('T')[0];
-    }
-    // Prendre les 10 premiers caractères
-    if (cleanDateStr.length > 10) {
-        cleanDateStr = cleanDateStr.substring(0, 10);
-    }
-    
-    const monthKey = cleanDateStr.substring(0, 7);
-    
-    // DEBUG: vérifier ce qui est cherché
-    console.log("Recherche shift pour", agentCode, "date", cleanDateStr);
-    console.log("planningData du mois", monthKey, ":", planningData[monthKey]?.[agentCode]);
-    
-    const existing = planningData[monthKey]?.[agentCode]?.[cleanDateStr];
-    if (existing && existing.shift) {
-        console.log("Shift trouvé:", existing.shift);
-        return existing.shift;
-    }
-    
-    console.log("Shift non trouvé, calcul théorique");
+    let cleanDate = formatDateUTC(dateStr);
+    const monthKey = cleanDate.substring(0, 7);
+    // Vérifier l'existence d'une entrée manuelle ou de remplacement
+    const existing = planningData[monthKey]?.[agentCode]?.[cleanDate];
+    if (existing && existing.shift) return existing.shift;
+
     const agent = agents.find(a => a.code === agentCode);
     if (!agent || agent.statut !== 'actif') return '-';
-    if (agent.groupe === 'J') return getJokerShift(agentCode, cleanDateStr);
-   if (agent.groupe === 'J') return getJokerShift(agentCode, dateStr); 
-    return getTheoreticalShift(agentCode, cleanDateStr);
+
+    if (agent.groupe === 'J') {
+        const replacedAgent = findReplacedAgent(agentCode, cleanDate);
+        if (replacedAgent) {
+            // Le joker prend le shift théorique de l'agent absent
+            return getTheoreticalShiftWithoutAbsence(replacedAgent.code, cleanDate);
+        }
+        return 'R'; // Aucun remplacement → repos
+    }
+    return getTheoreticalShift(agentCode, cleanDate);
 }
 
 function getAvailableJokersForDates(dates) {
@@ -1033,6 +1027,7 @@ async function saveLeaveWithJoker() {
             planningData[monthKey][selectedJoker.code][day.dateStr] = {
                 shift: day.jokerShift,
                 type: 'remplacement_joker',
+                replaces:agentCode,
                 comment: `Remplace ${agentCode} le ${day.dateStr} - ${comment || absenceType}`
             };
         }
@@ -1165,7 +1160,6 @@ function showGlobalStats() {
     </div>`;
     document.getElementById('main-content').innerHTML = html;
 }
-
 function showAgentStatsForm() {
     let agentsList = getFilteredAgents();
     const currentYear = new Date().getFullYear();
@@ -1244,7 +1238,48 @@ function showAgentStatsResult() {
     </div>`;
     document.getElementById('main-content').innerHTML = html;
 }
+function showWorkedDaysFormForCP() {
+    if (!currentUser || currentUser.role !== 'CP') {
+        alert("Accès réservé aux chefs de patrouille");
+        return;
+    }
+    const group = currentUser.groupe;
+    const today = new Date();
+    const currentYear = today.getFullYear();
+    const currentMonth = today.getMonth() + 1;
+    const firstDayOfMonth = new Date(currentYear, currentMonth - 1, 1).toISOString().split('T')[0];
+    const lastDayOfMonth = new Date(currentYear, currentMonth, 0).toISOString().split('T')[0];
+    const html = `<div class="info-section"><h3>📊 Classement des jours travaillés - Groupe ${group}</h3>
+        <div class="form-group"><label>📅 Date début</label>
+            <input type="date" id="customStartDate" class="form-input" value="${firstDayOfMonth}">
+        </div>
+        <div class="form-group"><label>📅 Date fin</label>
+            <input type="date" id="customEndDate" class="form-input" value="${lastDayOfMonth}">
+        </div>
+        <button class="popup-button green" onclick="showWorkedDaysResultForCP()">📊 Afficher</button>
+        <button class="popup-button gray" onclick="displayMainMenu()">Retour</button>
+    </div>`;
+    document.getElementById('main-content').innerHTML = html;
+}
 
+function showWorkedDaysResultForCP() {
+    if (!currentUser || currentUser.role !== 'CP') return;
+    const start = new Date(document.getElementById('customStartDate').value);
+    const end = new Date(document.getElementById('customEndDate').value);
+    const group = currentUser.groupe;
+    const agentsGroupe = agents.filter(a => a.groupe === group && a.statut === 'actif');
+    if (!agentsGroupe.length) { alert("Aucun agent dans ce groupe"); return; }
+    const results = agentsGroupe.map(agent => ({ agent, ...calculateWorkedStats(agent.code, start, end) }))
+        .sort((a, b) => b.totalGeneral - a.totalGeneral);
+    const periodName = `${start.toLocaleDateString()} - ${end.toLocaleDateString()}`;
+    let html = `<div class="info-section"><h3>📊 Classement - ${periodName} (Groupe ${group})</h3>
+        <div style="overflow-x:auto;"><table class="classement-table"><thead><tr><th>Rang</th><th>Agent</th><th>✅ Travail</th><th>🏖️ Congés</th><th>🎉 Fériés</th><th>⭐ Total</th></tr></thead><tbody>`;
+    results.forEach((r, i) => {
+        html += `<tr><td>${i+1}</td><td>${r.agent.nom} ${r.agent.prenom}</td><td>${r.travaillesNormaux}</td><td>${r.conges}</td><td>${r.feriesTravailles}</td><td><strong>${r.totalGeneral}</strong></td></tr>`;
+    });
+    html += `</tbody></table></div><button class="popup-button gray" onclick="displayMainMenu()">Retour</button></div>`;
+    document.getElementById('main-content').innerHTML = html;
+}
 function showWorkedDaysFormWithCustom() {
     const today = new Date();
     const currentYear = today.getFullYear();
@@ -1485,7 +1520,20 @@ function displayAgentMenu() {
         </div>
     `;
 }
-
+function viewMyPlanning() {
+    if (!currentUser || currentUser.role !== 'CP') {
+        alert("Accès réservé aux chefs de patrouille");
+        return;
+    }
+    const agentCode = currentUser.agentCode;
+    if (!agentCode) {
+        alert("Aucun agent lié à votre compte CP");
+        return;
+    }
+    const currentYear = new Date().getFullYear();
+    const currentMonth = new Date().getMonth() + 1;
+    showAgentPlanningSimple(agentCode, currentMonth, currentYear);
+}
 function viewAgentPlanning() {
     const agentCode = currentUser.agentCode;
     if (!agentCode) { alert("⚠️ Code agent non trouvé"); return; }
@@ -1507,9 +1555,6 @@ function showAgentPlanningSimple(agentCode, month, year) {
     let rows = [];
     for (let d = 1; d <= daysInMonth; d++) {
         const dateStr = `${year}-${month.toString().padStart(2,'0')}-${d.toString().padStart(2,'0')}`;
-        
-        // Après avoir construit dateStr, ajoutez :
-console.log("DEBUG - Jour:", d, "DateStr:", dateStr, "Shift:", shift);
         const date = new Date(year, month-1, d);
         const dayName = JOURS_FRANCAIS[date.getDay()];
         const shift = getShiftForAgent(agentCode, dateStr);
@@ -1535,9 +1580,9 @@ console.log("DEBUG - Jour:", d, "DateStr:", dateStr, "Shift:", shift);
         }
         rows.push(`<tr style="border-bottom:1px solid #34495e;">
             <td style="padding:8px; text-align:center; width:60px;"><strong>${d}</strong><br><span style="font-size:0.7em;">${dayName}</span></td>
-            <td style="background-color:${color}; color:white; text-align:center; padding:8px; font-weight:bold;">${shiftIcon}${shiftDisplay}</td>
-            <td style="padding:8px; text-align:center;">${holidayBadge || '-'}</td>
-          </tr>`);
+            <td style="background-color:${color}; color:white; text-align:center; padding:8px; font-weight:bold;">${shiftIcon}${shiftDisplay}</th>
+            <td style="padding:8px; text-align:center;">${holidayBadge || '-'}</th>
+          <tr>`);
     }
     let html = `<div class="info-section">
         <h3>📅 Mon Planning - ${getMonthName(month)} ${year}</h3>
@@ -1549,7 +1594,7 @@ console.log("DEBUG - Jour:", d, "DateStr:", dateStr, "Shift:", shift);
         <div style="overflow-x:auto;"><table class="planning-table" style="width:100%; border-collapse:collapse;">
             <thead><tr style="background-color:#34495e;"><th style="padding:10px;">Date</th><th style="padding:10px;">Shift</th><th style="padding:10px;">Jours fériés</th></tr></thead>
             <tbody>${rows.join('')}</tbody>
-            <tfoot style="background-color:#2c3e50;"><td><td colspan="3" style="padding:15px;">
+            <tfoot style="background-color:#2c3e50;"><tr><td colspan="3" style="padding:15px;">
                 <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:15px; text-align:center;">
                     <div style="background:#27ae60; padding:10px; border-radius:8px;">✅ Jours travaillés<br><span style="font-size:1.5em; font-weight:bold;">${stats.travaillesNormaux}</span></div>
                     <div style="background:#f39c12; padding:10px; border-radius:8px;">🏖️ Congés (C)<br><span style="font-size:1.5em; font-weight:bold;">${stats.conges}</span></div>
@@ -1932,7 +1977,7 @@ function afficherSoldesAgent(agentCode, anneeParam = null) {
         <tbody>${rows}</tbody>
         <tfoot><tr><td><strong>Total</strong></td><td><strong>${totalDroits.toFixed(2)}</strong></td><td><strong>${totalReports.toFixed(2)}</strong></td>
         <td><strong>${totalDispo.toFixed(2)}</strong></td><td><strong>${totalPris.toFixed(2)}</strong></td><td><strong style="color:#f1c40f;">${totalRestes.toFixed(2)}</strong></td><td></td></tr></tfoot>
-        </table></div><button class="popup-button gray" onclick="showSoldeMenu()">Retour</button></div>`;
+        </table></div><button class="popup-button gray" onclick="displayAgentMenu()">Retour</button></div>`;
     document.getElementById('main-content').innerHTML = html;
 }
 
@@ -1986,7 +2031,6 @@ function supprimerUnJourConge(agentCode, annee, mois) {
         afficherDetailMensuelConges(agentCode, annee);
     } else alert("Ce jour n'est pas un congé.");
 }
-
 function showSoldeMenu() {
     if (currentUser.role === 'AGENT') {
         const agent = agents.find(a => a.code === currentUser.agentCode);
@@ -2000,7 +2044,7 @@ function showSoldeMenu() {
         { text: "📈 Statistiques globales", onclick: "showSoldeStats()" },
         { text: "↩️ Retour", onclick: "displayMainMenu()", className: "back-button" }
     ];
-    displaySubMenu("📆 GESTION DES SOLDES DE CONGÉS", buttons);
+    displaySubMenu("📆 GESTION SOLDES CONGÉS", buttons);
 }
 
 function showSoldeAgentForm() {
@@ -2130,10 +2174,6 @@ function showAgentsList() {
       let tableHtml = '<div style="overflow-x:auto; width:100%; -webkit-overflow-scrolling:touch;">';
 tableHtml += '<table style="width:100%; border-collapse:collapse; background:#34495e; color:white;">';
 
- 
-
-
-        
         tableHtml += '<thead><tr style="background:#2c3e50;"><th style="padding:8px;">Code</th><th style="padding:8px;">Nom</th><th style="padding:8px;">Prénom</th><th style="padding:8px;">Groupe</th><th style="padding:8px;">Tél</th><th style="padding:8px;">Statut</th><th style="padding:8px;">Actions</th></tr></thead><tbody>';
         
         for (let i = 0; i < filteredAgents.length; i++) {
@@ -2156,7 +2196,7 @@ tableHtml += '<table style="width:100%; border-collapse:collapse; background:#34
         container.innerHTML = tableHtml;
         
         // DEBUG : alerte pour confirmer
-        alert("Tableau généré pour " + filteredAgents.length + " agents");
+      // alert("Tableau généré pour " + filteredAgents.length + " agents");
     }
 }
 function generateAgentsTable(data) {
@@ -2344,7 +2384,25 @@ function showAgentDetails(code) {
     </div>`;
     document.getElementById('main-content').innerHTML = html;
 }
-
+function showMyInfo() {
+    if (!currentUser) return;
+    const agent = agents.find(a => a.code === currentUser.agentCode);
+    if (!agent) {
+        alert("Aucune fiche agent associée à votre compte");
+        return;
+    }
+    const html = `<div class="info-section"><h3>👤 Mes Informations</h3>
+        <div class="info-item"><span class="info-label">Code:</span> ${agent.code}</div>
+        <div class="info-item"><span class="info-label">Nom:</span> ${agent.nom}</div>
+        <div class="info-item"><span class="info-label">Prénom:</span> ${agent.prenom}</div>
+        <div class="info-item"><span class="info-label">Groupe:</span> ${agent.groupe}</div>
+        <div class="info-item"><span class="info-label">Téléphone:</span> ${agent.tel || '-'}</div>
+        <div class="info-item"><span class="info-label">Email:</span> ${agent.email || '-'}</div>
+        <div class="info-item"><span class="info-label">Poste:</span> ${agent.poste || '-'}</div>
+        <button class="popup-button gray" onclick="displayMainMenu()">Retour</button>
+    </div>`;
+    document.getElementById('main-content').innerHTML = html;
+}
 function showImportCSVForm() {
     const html = `<div class="info-section"><h3>📥 Importer CSV</h3>
         <div class="form-group"><label>Fichier CSV (format: code;nom;prenom;groupe;tel)</label><input type="file" id="csvFile" accept=".csv"></div>
@@ -2518,7 +2576,52 @@ function executeGroupPlanning() {
     const year = parseInt(document.getElementById('groupPlanYear').value);
     showGroupPlanningWithTotals(group, month, year);
 }
+function showGroupStatsForm() {
+    if (!currentUser || currentUser.role !== 'CP') {
+        alert("Accès réservé aux chefs de patrouille");
+        return;
+    }
+    const group = currentUser.groupe;
+    if (!group) {
+        alert("Groupe non défini pour ce CP");
+        return;
+    }
+    // Afficher les stats pour son groupe
+    showGlobalStatsForGroup(group);
+}
 
+function showGlobalStatsForGroup(group) {
+    const agentsGroupe = agents.filter(a => a.groupe === group && a.statut === 'actif');
+    if (agentsGroupe.length === 0) {
+        alert(`Aucun agent actif dans le groupe ${group}`);
+        return;
+    }
+    let totalTravailles = 0, totalConges = 0, totalMaladies = 0, totalAutres = 0;
+    Object.keys(planningData).forEach(monthKey => {
+        agentsGroupe.forEach(agent => {
+            const agentData = planningData[monthKey]?.[agent.code];
+            if (agentData) {
+                Object.values(agentData).forEach(rec => {
+                    if (rec.shift === 'C') totalConges++;
+                    else if (rec.shift === 'M') totalMaladies++;
+                    else if (rec.shift === 'A') totalAutres++;
+                    else if (['1','2','3'].includes(rec.shift)) totalTravailles++;
+                });
+            }
+        });
+    });
+    const html = `<div class="info-section"><h3>📊 Statistiques Groupe ${group}</h3>
+        <div class="stats-grid">
+            <div class="stat-card"><div class="stat-value">${agentsGroupe.length}</div><div>👥 Agents</div></div>
+            <div class="stat-card"><div class="stat-value">${totalTravailles}</div><div>✅ Jours travaillés</div></div>
+            <div class="stat-card"><div class="stat-value">${totalConges}</div><div>🏖️ Congés</div></div>
+            <div class="stat-card"><div class="stat-value">${totalMaladies}</div><div>🤒 Maladies</div></div>
+            <div class="stat-card"><div class="stat-value">${totalAutres}</div><div>📝 Autres absences</div></div>
+        </div>
+        <button class="popup-button gray" onclick="displayMainMenu()">Retour</button>
+    </div>`;
+    document.getElementById('main-content').innerHTML = html;
+}
 function showGroupPlanningWithTotals(group, month, year) {
     let groupAgents;
     if (group === 'J') {
@@ -2544,12 +2647,12 @@ function showGroupPlanningWithTotals(group, month, year) {
        
             
             // === AJOUTEZ CES LIGNES ICI ===
-            console.log("=== DEBUG PLANNING ===");
-            console.log("Agent:", agent.code);
-            console.log("Date recherchée:", dateStr);
+            //console.log("=== DEBUG PLANNING ===");
+          //  console.log("Agent:", agent.code);
+        //    console.log("Date recherchée:", dateStr);
             const monthKey = dateStr.substring(0,7);
             const shiftData = planningData[monthKey]?.[agent.code]?.[dateStr];
-            console.log("Donnée trouvée dans planningData:", shiftData);
+           // console.log("Donnée trouvée dans planningData:", shiftData);
           
   
             
@@ -3741,8 +3844,19 @@ async function modifyWarning(id) {
 // ==================== PARTIE 16 : JOURS FÉRIÉS, EXPORTATIONS, CONFIGURATION ====================
 // Conservez vos fonctions existantes (displayHolidaysMenu, displayExportMenu, displayConfigMenu)
 //   JOURS FÉRIÉS ====================
-
 function displayHolidaysMenu() {
+    // Si l'utilisateur est un agent, afficher uniquement la consultation
+    if (currentUser && currentUser.role === 'AGENT') {
+        displaySubMenu("JOURS FÉRIÉS (consultation)", [
+            { text: "📋 Liste des Jours Fériés", onclick: "showHolidaysList()" },
+            { text: "📅 Calendrier Annuel", onclick: "showHolidaysCalendar()" },
+            { text: "↩️ Retour", onclick: "displayAgentMenu()", className: "back-button" }
+        ]);
+        return;
+    }
+    // Pour ADMIN et CP (si vous voulez aussi CP sans ajout ? A vous de voir)
+    // Si CP doit aussi être limité, ajoutez une condition similaire.
+    // Sinon, gardez le menu complet pour ADMIN.
     displaySubMenu("JOURS FÉRIÉS", [
         { text: "➕ Ajouter Jour Férié", onclick: "showAddHolidayForm()" },
         { text: "📋 Liste Jours Fériés", onclick: "showHolidaysList()" },
@@ -3752,6 +3866,12 @@ function displayHolidaysMenu() {
 }
 
 function showAddHolidayForm() {
+    if (currentUser && currentUser.role !== 'ADMIN') {
+        alert("⚠️ Accès réservé à l'administrateur");
+        displayHolidaysMenu();
+        return;
+    }
+
     const currentYear = new Date().getFullYear();
     const html = `<div class="info-section"><h3>🎉 Ajouter Jour Férié</h3>
         <div class="form-group"><label>Date</label><input type="date" id="holidayDate" class="form-input" value="${currentYear}-01-01"></div>
@@ -3764,6 +3884,12 @@ function showAddHolidayForm() {
 }
 
 function saveHoliday() {
+    if (currentUser && currentUser.role !== 'ADMIN') {
+        alert("⚠️ Accès réservé à l'administrateur");
+        displayHolidaysMenu();
+        return;
+    }
+    
     const fullDate = document.getElementById('holidayDate').value;
     const description = document.getElementById('holidayDesc').value;
     const type = document.getElementById('holidayType').value;
@@ -3826,6 +3952,12 @@ function filterHolidaysList() {
 }
 
 function generateYearlyHolidays() {
+    if (currentUser && currentUser.role !== 'ADMIN') {
+        alert("⚠️ Accès réservé à l'administrateur");
+        displayHolidaysMenu();
+        return;
+    }
+    
     if (!checkPassword("Réinitialisation des jours fériés")) return;
     if (confirm("⚠️ Réinitialiser les jours fériés aux valeurs par défaut ?")) {
         initializeHolidays();
@@ -3877,8 +4009,14 @@ function generateCalendarHTML(year) {
     html += '</div>';
     return html;
 }
-
 function deleteHoliday(dateStr) {
+    if (currentUser && currentUser.role !== 'ADMIN') {
+        alert("⚠️ Action non autorisée");
+        displayHolidaysMenu();
+        return;
+    }
+    if (!checkPassword("Suppression jour férié")) return;
+
     if (!checkPassword("Suppression jour férié")) return;
     if (confirm(`Supprimer le jour férié du ${dateStr} ?`)) {
         holidays = holidays.filter(h => h.date !== dateStr);
@@ -3887,8 +4025,12 @@ function deleteHoliday(dateStr) {
         showHolidaysList();
     }
 }
-
 function modifyHoliday(dateStr) {
+    if (currentUser && currentUser.role !== 'ADMIN') {
+        alert("⚠️ Action non autorisée");
+        displayHolidaysMenu();
+        return;
+    }
     const holiday = holidays.find(h => h.date === dateStr);
     if (!holiday) return;
     const newDesc = prompt("Nouvelle description :", holiday.description);
