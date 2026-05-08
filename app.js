@@ -75,7 +75,53 @@ let users = [
     { id: 5, username: "cp_d", password: "CPD123", role: "CP", nom: "YAGOUB", prenom: "mouhcine", groupe: "D", agentCode: "CPD" },
     { id: 6, username: "agent_a001", password: "AGENT123", role: "AGENT", nom: "Durand", prenom: "Jean", groupe: null, agentCode: "A001" },
 ];
+// PARTIE 30 
+// Synchronisation des utilisateurs
+async function loadSharedUsers() {
+    if (!APPS_SCRIPT_URL) return false;
+    try {
+        const response = await fetch(`${APPS_SCRIPT_URL}?tab=Utilisateurs`);
+        if (!response.ok) throw new Error("Erreur réseau");
+        const cloudUsers = await response.json();
+        if (Array.isArray(cloudUsers) && cloudUsers.length > 0) {
+            users = cloudUsers;
+            localStorage.setItem('sga_users', JSON.stringify(users));
+            console.log(`✅ Utilisateurs chargés (${users.length})`);
+        } else {
+            console.log("Aucun utilisateur cloud → conservation locale");
+        }
+        return true;
+    } catch (err) {
+        console.error("❌ Erreur chargement utilisateurs", err);
+        return false;
+    }
+}
 
+async function saveSharedUsers() {
+    if (!APPS_SCRIPT_URL) return;
+    try {
+        const dataToSend = users.map(u => ({
+            id: u.id,
+            username: u.username,
+            password: u.password,
+            role: u.role,
+            nom: u.nom || '',
+            prenom: u.prenom || '',
+            groupe: u.groupe || '',
+            agentCode: u.agentCode || ''
+        }));
+        const response = await fetch(`${APPS_SCRIPT_URL}?tab=Utilisateurs&replace=true`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify(dataToSend)
+        });
+        const text = await response.text();
+        if (text !== "OK") throw new Error(text);
+        console.log("✅ Utilisateurs sauvegardés");
+    } catch (err) {
+        console.error("❌ Erreur sauvegarde utilisateurs", err);
+    }
+}
 // ==================== PARTIE 2 : FONCTIONS CLOUD (AGENTS & CONGÉS) ====================
 async function loadSharedAgents() {
     if (!APPS_SCRIPT_URL) return false;
@@ -623,6 +669,7 @@ function saveData() {
     if (warnings.length > 0) saveSharedAvertissements();
     saveSharedPanique();      // doit exister
     saveSharedHabillement();  // doit exister
+     saveSharedUsers();
     saveSharedAvertissements();// doit exister
 
     console.log("💾 Sauvegarde locale + cloud lancée");
@@ -659,7 +706,9 @@ async function loadData() {
     await loadSharedAgents();
     await loadSharedPlanning();
     await loadSharedPanique();       // à définir
-    await loadSharedHabillement();   // à définir
+    await loadSharedHabillement();
+    await loadSharedUsers();
+    // à définir
     await loadSharedAvertissements();// à définir
     // Optionnel : charger aussi radios et notifications si vous avez des feuilles
     
