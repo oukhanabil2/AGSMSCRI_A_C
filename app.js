@@ -98,12 +98,11 @@ async function loadSharedUsers() {
 }
 
 async function saveSharedUsers() {
-  if (!APPS_SCRIPT_URL) return;
-    if (agents.length === 0) {
-        console.warn("Sauvegarde agents ignorée : tableau vide");
+    if (!APPS_SCRIPT_URL) return;
+    if (!currentUser || users.length === 0) {
+        console.warn("Sauvegarde utilisateurs ignorée : aucun utilisateur ou utilisateur non connecté");
         return;
     }
-    if (!APPS_SCRIPT_URL) return;
     try {
         const dataToSend = users.map(u => ({
             id: u.id,
@@ -166,34 +165,27 @@ async function loadSharedAgents() {
 
 async function saveSharedAgents() {
     if (!APPS_SCRIPT_URL) return;
-    if (agents.length === 0) {
-        console.warn("Sauvegarde agents ignorée : tableau vide");
+    if (!currentUser || agents.length === 0) {
+        console.warn("Sauvegarde agents ignorée : aucun agent ou utilisateur non connecté");
         return;
     }
-  
-
-   //  alert("saveSharedPanique appelée, nombre de codes = " + panicCodes.length);
-    
- 
-    if (!APPS_SCRIPT_URL) return;
     try {
-     const dataToSend = agents.map(a => ({
-    Code: a.code,
-    Nom: a.nom,
-    Prénom: a.prenom,
-    Groupe: a.groupe,
-    Tel: a.tel || '',
-    Matricule: a.matricule || '',
-    Cin: a.cin || '',
-    Poste: a.poste || '',
-    DateEntree: a.date_entree ? formatDateUTC(a.date_entree) : '',
-    Statut: a.statut === 'actif' ? 'Actif' : 'Inactif',
-    Adresse: a.adresse || '',
-    Email: a.email || '',
-    Date_Naissance: a.date_naissance ? formatDateUTC(a.date_naissance) : '',
-    DateSortie: a.date_sortie ? formatDateUTC(a.date_sortie) : ''
-}));
-        
+        const dataToSend = agents.map(a => ({
+            Code: a.code,
+            Nom: a.nom,
+            Prénom: a.prenom,
+            Groupe: a.groupe,
+            Tel: a.tel || '',
+            Matricule: a.matricule || '',
+            Cin: a.cin || '',
+            Poste: a.poste || '',
+            DateEntree: a.date_entree ? formatDateUTC(a.date_entree) : '',
+            Statut: a.statut === 'actif' ? 'Actif' : 'Inactif',
+            Adresse: a.adresse || '',
+            Email: a.email || '',
+            Date_Naissance: a.date_naissance ? formatDateUTC(a.date_naissance) : '',
+            DateSortie: a.date_sortie ? formatDateUTC(a.date_sortie) : ''
+        }));
         const response = await fetch(`${APPS_SCRIPT_URL}?tab=Agents&replace=true`, {
             method: 'POST',
             headers: { 'Content-Type': 'text/plain' },
@@ -201,40 +193,34 @@ async function saveSharedAgents() {
         });
         const text = await response.text();
         if (text !== "OK") throw new Error(text);
-        
-        console.log("✅ Agents sauvegardés (Google)");
-        if (typeof showSnackbar === 'function') showSnackbar("✅ Agents synchronisés");
+        console.log("✅ Agents sauvegardés");
     } catch (err) {
-        console.error("❌ Erreur sauvegarde Google", err);
-        if (typeof showSnackbar === 'function') showSnackbar("❌ Erreur de synchronisation");
+        console.error("❌ Erreur sauvegarde agents", err);
     }
 }
 async function saveSharedPlanning() {
- if (!APPS_SCRIPT_URL) return;
-    if (agents.length === 0) {
-        console.warn("Sauvegarde agents ignorée : tableau vide");
-        return;
-    } 
     if (!APPS_SCRIPT_URL) return;
+    if (!currentUser || Object.keys(planningData).length === 0) {
+        console.warn("Sauvegarde planning ignorée : planning vide ou utilisateur non connecté");
+        return;
+    }
     try {
         const dataToSend = [];
         for (const [monthKey, agentsData] of Object.entries(planningData)) {
             for (const [agentCode, days] of Object.entries(agentsData)) {
                 for (const [dateStr, shiftData] of Object.entries(days)) {
-                    // ✅ Utiliser formatDateUTC au lieu de new Date()
                     let cleanDate = formatDateUTC(dateStr);
-          dataToSend.push({
-    AgentCode: agentCode,
-    Date: cleanDate,
-    Shift: shiftData.shift,
-    Type: shiftData.type || 'theorique',
-    Commentaire: shiftData.comment || '',
-    Replaces: shiftData.replaces || ''   // ← Ajout essentiel
-});
+                    dataToSend.push({
+                        AgentCode: agentCode,
+                        Date: cleanDate,
+                        Shift: shiftData.shift,
+                        Type: shiftData.type || 'theorique',
+                        Commentaire: shiftData.comment || '',
+                        Replaces: shiftData.replaces || ''
+                    });
                 }
             }
         }
-        
         const response = await fetch(`${APPS_SCRIPT_URL}?tab=Planning&replace=true`, {
             method: 'POST',
             headers: { 'Content-Type': 'text/plain' },
@@ -243,10 +229,8 @@ async function saveSharedPlanning() {
         const text = await response.text();
         if (text !== "OK") throw new Error(text);
         console.log("✅ Planning sauvegardé");
-        if (typeof showSnackbar === 'function') showSnackbar("✅ Planning synchronisé");
     } catch (err) {
         console.error("❌ Erreur sauvegarde planning", err);
-        if (typeof showSnackbar === 'function') showSnackbar("❌ Erreur synchronisation planning");
     }
 }
 // ==================== SYNCHRONISATION SOLDES CONGÉS ====================
@@ -280,6 +264,10 @@ async function loadSharedSoldes() {
 
 async function saveSharedSoldes() {
     if (!APPS_SCRIPT_URL) return;
+    if (!currentUser || soldesConges.length === 0) {
+        console.warn("Sauvegarde soldes ignorée : aucun solde ou utilisateur non connecté");
+        return;
+    }
     try {
         const dataToSend = soldesConges.map(s => ({
             AgentCode: s.agentCode,
@@ -332,12 +320,11 @@ async function loadSharedPanique() {
 }
 
 async function saveSharedPanique() {
-  if (!APPS_SCRIPT_URL) return;
-    if (agents.length === 0) {
-        console.warn("Sauvegarde agents ignorée : tableau vide");
+    if (!APPS_SCRIPT_URL) return;
+    if (!currentUser || panicCodes.length === 0) {
+        console.warn("Sauvegarde panique ignorée : aucun code ou utilisateur non connecté");
         return;
     }
-    if (!APPS_SCRIPT_URL) return;
     try {
         const dataToSend = panicCodes.map(p => ({
             AgentCode: p.agent_code,
@@ -411,14 +398,12 @@ async function loadSharedHabillement() {
 }
 
 async function saveSharedHabillement() {
- if (!APPS_SCRIPT_URL) return;
-    if (agents.length === 0) {
-        console.warn("Sauvegarde agents ignorée : tableau vide");
-        return;
-    } 
     if (!APPS_SCRIPT_URL) return;
+    if (!currentUser || uniforms.length === 0) {
+        console.warn("Sauvegarde habillement ignorée : aucun uniforme ou utilisateur non connecté");
+        return;
+    }
     try {
-      
         const dataToSend = uniforms.map(u => ({
             AgentCode: u.agentCode,
             Date: u.date,
@@ -470,12 +455,11 @@ async function loadSharedAvertissements() {
 }
 
 async function saveSharedAvertissements() {
-  if (!APPS_SCRIPT_URL) return;
-    if (agents.length === 0) {
-        console.warn("Sauvegarde agents ignorée : tableau vide");
+    if (!APPS_SCRIPT_URL) return;
+    if (!currentUser || warnings.length === 0) {
+        console.warn("Sauvegarde avertissements ignorée : aucun avertissement ou utilisateur non connecté");
         return;
     }
-    if (!APPS_SCRIPT_URL) return;
     try {
         const dataToSend = warnings.map(w => ({
             Id: w.id,
@@ -703,7 +687,7 @@ function saveData() {
     saveSharedHabillement();  // doit exister
      saveSharedUsers();
     saveSharedAvertissements();// doit exister
-
+saveSharedSoldes();
     console.log("💾 Sauvegarde locale + cloud lancée");
 }
 
@@ -809,7 +793,7 @@ function initializeDemoAgents() {
 
 function checkPassword(action) {
     const pwd = prompt(`🔐 Confirmation pour: ${action}\nMot de passe administrateur:`);
-    if (pwd !== "NABIL1974") { alert("❌ Mot de passe incorrect!"); return false; }
+    if (pwd !== "NABIL1974a") { alert("❌ Mot de passe incorrect!"); return false; }
     return true;
 }
 
