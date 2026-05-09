@@ -2,7 +2,7 @@
 console.log("🚀 SGA v8.0 - Application chargée");
 
 // ==================== PARTIE 1 : CONSTANTES & CONFIGURATION ====================
-const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwCQK1qbKqfTC6knBPDzkoMuvNYNwkAweCyTkM9mbK32Fr7C6GSFB_xJjTSGTrV3nEVqQ/exec";
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxwlE0KOxF68qKG7p5EgHAqkKv4z2rpTCubn707iBlN81C70tpKS3XUN_Pp0L6PlpLvKA/exec";
 const SHEET_BEST_BASE_URL = APPS_SCRIPT_URL;
 
 const JOURS_FRANCAIS = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
@@ -166,22 +166,22 @@ async function saveSharedAgents() {
  
     if (!APPS_SCRIPT_URL) return;
     try {
-        const dataToSend = agents.map(a => ({
-            Code: a.code,
-            Nom: a.nom,
-            Prénom: a.prenom,
-            Groupe: a.groupe,
-            Tel: a.tel || '',
-            Matricule: a.matricule || '',
-            Cin: a.cin || '',
-            Poste: a.poste || '',
-            DateEntree: a.date_entree || '',
-            Statut: a.statut === 'actif' ? 'Actif' : 'Inactif',
-            Adresse: a.adresse || '',
-            Email: a.email || '',
-            Date_Naissance: a.date_naissance || '',
-            DateSortie: a.date_sortie || ''
-        }));
+     const dataToSend = agents.map(a => ({
+    Code: a.code,
+    Nom: a.nom,
+    Prénom: a.prenom,
+    Groupe: a.groupe,
+    Tel: a.tel || '',
+    Matricule: a.matricule || '',
+    Cin: a.cin || '',
+    Poste: a.poste || '',
+    DateEntree: a.date_entree ? formatDateUTC(a.date_entree) : '',
+    Statut: a.statut === 'actif' ? 'Actif' : 'Inactif',
+    Adresse: a.adresse || '',
+    Email: a.email || '',
+    Date_Naissance: a.date_naissance ? formatDateUTC(a.date_naissance) : '',
+    DateSortie: a.date_sortie ? formatDateUTC(a.date_sortie) : ''
+}));
         
         const response = await fetch(`${APPS_SCRIPT_URL}?tab=Agents&replace=true`, {
             method: 'POST',
@@ -676,45 +676,68 @@ function saveData() {
 }
 
 async function loadData() {
-    // 1. Chargement depuis localStorage
-    const savedUsers = localStorage.getItem('sga_users');
-    if (savedUsers) users = JSON.parse(savedUsers);
-    
-    const rawPlanning = JSON.parse(localStorage.getItem('sga_planning') || '{}');
-    planningData = cleanAllDatesInPlanning(rawPlanning);
-    
-    holidays = JSON.parse(localStorage.getItem('sga_holidays') || '[]');
-    panicCodes = JSON.parse(localStorage.getItem('sga_panic_codes') || '[]');
-    radios = JSON.parse(localStorage.getItem('sga_radios') || '[]');
-    uniforms = JSON.parse(localStorage.getItem('sga_uniforms') || '[]');
-    warnings = JSON.parse(localStorage.getItem('sga_warnings') || '[]');
-    replacementNotifications = JSON.parse(localStorage.getItem('sga_notifications') || '[]');
-    notifications = JSON.parse(localStorage.getItem('sga_sys_notifications') || '[]');
-    soldesConges = JSON.parse(localStorage.getItem('sga_soldes_conges') || '[]');
-    if (soldesConges.length > 0) saveSharedSoldes();
-    
-    if (holidays.length === 0) initializeHolidays();
-    
-    const savedAgents = localStorage.getItem('sga_agents');
-    if (savedAgents && savedAgents.length > 0) {
-        agents = JSON.parse(savedAgents);
-    } else {
-        if (agents.length === 0) initializeDemoAgents();
+    try {
+        // 1. Chargement depuis localStorage (rapide)
+        const savedUsers = localStorage.getItem('sga_users');
+        if (savedUsers) users = JSON.parse(savedUsers);
+        
+        const rawPlanning = JSON.parse(localStorage.getItem('sga_planning') || '{}');
+        planningData = cleanAllDatesInPlanning ? cleanAllDatesInPlanning(rawPlanning) : rawPlanning;
+        
+        holidays = JSON.parse(localStorage.getItem('sga_holidays') || '[]');
+        panicCodes = JSON.parse(localStorage.getItem('sga_panic_codes') || '[]');
+        radios = JSON.parse(localStorage.getItem('sga_radios') || '[]');
+        uniforms = JSON.parse(localStorage.getItem('sga_uniforms') || '[]');
+        warnings = JSON.parse(localStorage.getItem('sga_warnings') || '[]');
+        replacementNotifications = JSON.parse(localStorage.getItem('sga_notifications') || '[]');
+        notifications = JSON.parse(localStorage.getItem('sga_sys_notifications') || '[]');
+        soldesConges = JSON.parse(localStorage.getItem('sga_soldes_conges') || '[]');
+        
+        if (holidays.length === 0) initializeHolidays();
+        
+        const savedAgents = localStorage.getItem('sga_agents');
+        if (savedAgents && savedAgents.length > 0) {
+            agents = JSON.parse(savedAgents);
+        } else {
+            if (agents.length === 0) initializeDemoAgents();
+        }
+        
+        // 2. Synchronisation cloud (avec gestion d'erreur)
+        try {
+            await loadSharedAgents();
+        } catch(e) { console.warn("Agents cloud:", e); }
+        
+        try {
+            await loadSharedPlanning();
+        } catch(e) { console.warn("Planning cloud:", e); }
+        
+        try {
+            await loadSharedUsers();
+        } catch(e) { console.warn("Users cloud:", e); }
+        
+        try {
+            await loadSharedPanique();
+        } catch(e) { console.warn("Panique cloud:", e); }
+        
+        try {
+            await loadSharedHabillement();
+        } catch(e) { console.warn("Habillement cloud:", e); }
+        
+        try {
+            await loadSharedAvertissements();
+        } catch(e) { console.warn("Avertissements cloud:", e); }
+        
+        // 3. Affichage du menu seulement après tous les chargements
+        if (currentUser) {
+            displayMainMenu();
+        }
+        
+        console.log("✅ loadData terminé avec succès");
+    } catch (err) {
+        console.error("❌ Erreur dans loadData:", err);
+        // Afficher quand même le menu avec les données disponibles
+        if (currentUser) displayMainMenu();
     }
-    
-    // 2. Synchronisation cloud en priorité (écrase les données locales si différent)
-    await loadSharedAgents();
-    await loadSharedPlanning();
-    await loadSharedUsers();
-    await loadSharedPanique();       // à définir
-    await loadSharedHabillement();
-    
-    // à définir
-    await loadSharedAvertissements();// à définir
-    // Optionnel : charger aussi radios et notifications si vous avez des feuilles
-    
-    displayMainMenu();
-    if (currentUser) syncAgentsFromCloud();
 }
 
 
@@ -2263,49 +2286,68 @@ tableHtml += '<table style="width:100%; border-collapse:collapse; background:#34
       // alert("Tableau généré pour " + filteredAgents.length + " agents");
     }
 }
-function generateAgentsTable(data) {
-    if (!data.length) return '<p>Aucun agent trouvé</p>';
+function generateAgentsTable(agentsList) {
+    if (!agentsList || agentsList.length === 0) {
+        return '<p style="text-align:center; padding:20px;">Aucun agent trouvé</p>';
+    }
     
-    let html = '<table border="1" style="width:100%; border-collapse:collapse;">';
-    html += '<thead><tr><th>Code</th><th>Nom</th><th>Prénom</th><th>Groupe</th><th>Téléphone</th><th>Statut</th><th>Actions</th></tr></thead><tbody>';
+    let html = '<div style="overflow-x:auto;"><table style="width:100%; border-collapse:collapse; background:#34495e; color:white; font-size:0.85rem;">';
+    html += '<thead><tr style="background:#2c3e50;"><th style="padding:6px 5px;">Code</th><th style="padding:6px 5px;">Nom</th><th style="padding:6px 5px;">Prénom</th><th style="padding:6px 5px;">Groupe</th><th style="padding:6px 5px;">Tél</th><th style="padding:6px 5px;">Statut</th><th style="padding:6px 5px;">Actions</th></tr></thead><tbody>';
     
-    for (let i = 0; i < data.length; i++) {
-        const a = data[i];
-        html += `<tr>
-            <td>${escapeHtml(a.code)}</td>
-            <td>${escapeHtml(a.nom)}</td>
-            <td>${escapeHtml(a.prenom)}</td>
-            <td>${a.groupe}</td>
-            <td>${a.tel || '-'}</td>
-            <td>${a.statut === 'actif' ? 'Actif' : 'Inactif'}</td>
-            <td>
-                <button onclick="alert('Modifier ${a.code}')">✏️</button>
-                <button onclick="alert('Supprimer ${a.code}')">🗑️</button>
-                <button onclick="alert('Détails ${a.code}')">👁️</button>
-            </td>
+    for (let i = 0; i < agentsList.length; i++) {
+        const a = agentsList[i];
+        html += `<tr style="border-bottom:1px solid #2c3e50;">
+            <td style="padding:4px 5px;">${escapeHtml(a.code)}</th>
+            <td style="padding:4px 5px;">${escapeHtml(a.nom)}</th>
+            <td style="padding:4px 5px;">${escapeHtml(a.prenom)}</th>
+            <td style="padding:4px 5px;">${a.groupe || '-'}</th>
+            <td style="padding:4px 5px;">${a.tel || '-'}</th>
+            <td style="padding:4px 5px;"><span style="background:${a.statut === 'actif' ? '#27ae60' : '#e74c3c'}; padding:2px 6px; border-radius:12px; font-size:0.75rem;">${a.statut === 'actif' ? 'Actif' : 'Inactif'}</span></th>
+            <td style="padding:4px 5px; white-space:nowrap;">
+                <button onclick="showEditAgent('${a.code}')" style="background:#3498db; border:none; padding:2px 6px; color:white; border-radius:3px; cursor:pointer; font-size:0.7rem; margin:0 1px;">✏️</button>
+                <button onclick="deleteAgent('${a.code}')" style="background:#e74c3c; border:none; padding:2px 6px; color:white; border-radius:3px; cursor:pointer; font-size:0.7rem; margin:0 1px;">🗑️</button>
+                <button onclick="showAgentDetails('${a.code}')" style="background:#f39c12; border:none; padding:2px 6px; color:white; border-radius:3px; cursor:pointer; font-size:0.7rem; margin:0 1px;">👁️</button>
+            </th>
         </tr>`;
     }
-    
-    html += '</tbody></table>';
+    html += '</tbody></table></div>';
     return html;
 }
-
 function filterAgentsList() {
     const term = document.getElementById('searchAgent')?.value.toLowerCase() || '';
+    const group = document.getElementById('filterGroup')?.value || 'ALL';
     const status = document.getElementById('filterStatus')?.value || 'ALL';
     
-    let filtered;
-    if (currentUser.role === 'CP') {
-        filtered = agents.filter(a => a.groupe === currentUser.groupe && (a.nom.toLowerCase().includes(term) || a.prenom.toLowerCase().includes(term) || a.code.toLowerCase().includes(term)) && (status === 'ALL' || a.statut === status));
-    } else {
-        const group = document.getElementById('filterGroup')?.value || 'ALL';
-        filtered = agents.filter(a => (a.nom.toLowerCase().includes(term) || a.prenom.toLowerCase().includes(term) || a.code.toLowerCase().includes(term)) && (group === 'ALL' || a.groupe === group) && (status === 'ALL' || a.statut === status));
+    let filtered = agents;
+    
+    // Filtre par groupe (si différent de ALL)
+    if (group !== 'ALL') {
+        filtered = filtered.filter(a => a.groupe === group);
     }
     
-   
-alert("HTML généré : " + tableHtml);
-
-    document.getElementById('agentsListContainer').innerHTML = generateAgentsTable(filtered);
+    // Filtre par statut
+    if (status !== 'ALL') {
+        filtered = filtered.filter(a => a.statut === status);
+    }
+    
+    // Filtre par recherche textuelle (code, nom, prénom)
+    if (term !== '') {
+        filtered = filtered.filter(a => 
+            a.code.toLowerCase().includes(term) ||
+            a.nom.toLowerCase().includes(term) ||
+            a.prenom.toLowerCase().includes(term)
+        );
+    }
+    
+    // Appliquer aussi le filtre CP si nécessaire
+    if (currentUser && currentUser.role === 'CP') {
+        filtered = filtered.filter(a => a.groupe === currentUser.groupe);
+    }
+    
+    const container = document.getElementById('agentsListContainer');
+    if (container) {
+        container.innerHTML = generateAgentsTable(filtered);
+    }
 }
 
 function showAddAgentForm() {
@@ -2336,25 +2378,34 @@ async function addNewAgent() {
     const matricule = document.getElementById('newMatricule').value;
     const cin = document.getElementById('newCin').value;
     const poste = document.getElementById('newPoste').value;
-    const date_entree = document.getElementById('newDateEntree').value;
+    let date_entree = document.getElementById('newDateEntree').value;
     const adresse = document.getElementById('newAdresse').value;
     const email = document.getElementById('newEmail').value;
 
     if (!code || !nom || !prenom) { alert("⚠️ Code, Nom et Prénom requis!"); return; }
     if (agents.find(a => a.code === code)) { alert(`⚠️ Le code ${code} existe déjà!`); return; }
 
-    // Ajout local
-    agents.push({ code, nom, prenom, groupe, tel, matricule, cin, poste, date_entree, adresse, email, statut: 'actif', date_sortie: null });
-    saveData();
+    // Formater la date si la fonction existe, sinon garder la valeur brute
+    if (typeof formatDateUTC === 'function' && date_entree) {
+        date_entree = formatDateUTC(date_entree);
+    }
 
-    // Synchronisation cloud
+    // Ajout local
+    agents.push({ 
+        code, nom, prenom, groupe, tel, matricule, cin, poste, 
+        date_entree, adresse, email, 
+        statut: 'actif', 
+        date_sortie: null,
+        date_naissance: '',
+        adresse: adresse || '',
+        email: email || ''
+    });
+    
+    saveData();
     await saveSharedAgents();
-    location.reload();
     
     alert(`✅ Agent ${code} ajouté avec succès!`);
-    
-    // FORCER LE RECHARGEMENT COMPLET DE LA PAGE
-    location.reload();
+    showAgentsList();
 }
 
 function showEditAgent(code) {
@@ -2391,7 +2442,8 @@ async function updateAgent(code) {
         agents[idx].matricule = document.getElementById('editMatricule').value;
         agents[idx].cin = document.getElementById('editCin').value;
         agents[idx].poste = document.getElementById('editPoste').value;
-        agents[idx].date_entree = document.getElementById('editDateEntree').value;
+       agents[idx].date_entree = formatDateUTC(document.getElementById('editDateEntree').value); 
+        
         agents[idx].adresse = document.getElementById('editAdresse').value;
         agents[idx].email = document.getElementById('editEmail').value;
         agents[idx].statut = document.getElementById('editStatut').value;

@@ -887,3 +887,34 @@ h2, h3, h4, .popup-header h2, .info-section h3 {
 }
     }
 }
+/* Soldes congés - inputs dans tableau */
+td input[type="number"] {
+    background-color: #2c3e50;
+    border: 1px solid #f39c12;
+    border-radius: 4px;
+    padding: 4px;
+    color: white;
+    font-weight: bold;
+}
+/* Réduction de la hauteur des lignes pour tous les tableaux */
+.classement-table th, .classement-table td,
+.planning-table th, .planning-table td,
+table th, table td {
+    padding: 4px 6px !important;
+    font-size: 0.8rem;
+}
+
+/* Boutons d'action plus compacts */
+.action-btn.small {
+    padding: 2px 5px !important;
+    font-size: 0.7rem !important;
+}
+
+/* Réduction des marges internes des cartes */
+.stat-card {
+    padding: 8px !important;
+}
+
+.stat-value {
+    font-size: 1.5rem !important;
+}
