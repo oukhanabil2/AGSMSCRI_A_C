@@ -98,6 +98,11 @@ async function loadSharedUsers() {
 }
 
 async function saveSharedUsers() {
+  if (!APPS_SCRIPT_URL) return;
+    if (agents.length === 0) {
+        console.warn("Sauvegarde agents ignorée : tableau vide");
+        return;
+    }
     if (!APPS_SCRIPT_URL) return;
     try {
         const dataToSend = users.map(u => ({
@@ -160,7 +165,13 @@ async function loadSharedAgents() {
 }
 
 async function saveSharedAgents() {
- 
+    if (!APPS_SCRIPT_URL) return;
+    if (agents.length === 0) {
+        console.warn("Sauvegarde agents ignorée : tableau vide");
+        return;
+    }
+  
+
    //  alert("saveSharedPanique appelée, nombre de codes = " + panicCodes.length);
     
  
@@ -199,6 +210,11 @@ async function saveSharedAgents() {
     }
 }
 async function saveSharedPlanning() {
+ if (!APPS_SCRIPT_URL) return;
+    if (agents.length === 0) {
+        console.warn("Sauvegarde agents ignorée : tableau vide");
+        return;
+    } 
     if (!APPS_SCRIPT_URL) return;
     try {
         const dataToSend = [];
@@ -316,6 +332,11 @@ async function loadSharedPanique() {
 }
 
 async function saveSharedPanique() {
+  if (!APPS_SCRIPT_URL) return;
+    if (agents.length === 0) {
+        console.warn("Sauvegarde agents ignorée : tableau vide");
+        return;
+    }
     if (!APPS_SCRIPT_URL) return;
     try {
         const dataToSend = panicCodes.map(p => ({
@@ -390,8 +411,14 @@ async function loadSharedHabillement() {
 }
 
 async function saveSharedHabillement() {
+ if (!APPS_SCRIPT_URL) return;
+    if (agents.length === 0) {
+        console.warn("Sauvegarde agents ignorée : tableau vide");
+        return;
+    } 
     if (!APPS_SCRIPT_URL) return;
     try {
+      
         const dataToSend = uniforms.map(u => ({
             AgentCode: u.agentCode,
             Date: u.date,
@@ -443,6 +470,11 @@ async function loadSharedAvertissements() {
 }
 
 async function saveSharedAvertissements() {
+  if (!APPS_SCRIPT_URL) return;
+    if (agents.length === 0) {
+        console.warn("Sauvegarde agents ignorée : tableau vide");
+        return;
+    }
     if (!APPS_SCRIPT_URL) return;
     try {
         const dataToSend = warnings.map(w => ({
