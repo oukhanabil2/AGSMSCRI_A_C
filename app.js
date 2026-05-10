@@ -837,12 +837,15 @@ function showLogin() {
     const html = `
         <div class="login-overlay" id="loginOverlay" style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.95); display:flex; justify-content:center; align-items:center; z-index:10000;">
             <div class="login-box" style="background:#2c3e50; padding:30px; border-radius:15px; width:350px; text-align:center; border:1px solid #f39c12;">
-                <h2 style="color:#f39c12;">🏢 SGA v8.0</h2>
-                <h3 style="color:white;">CleanCo</h3>
+                <div style="text-align:center; margin-bottom:20px;">
+                    <img src="logo.png" alt="Logo AGSM" style="max-width:100px; height:auto; border-radius:10px;">
+                </div>
+                <h2 style="color:#f39c12;">🏢 AGSM</h2>
+                <h3 style="color:white;">Groupe ASW</h3>
+                <p style="color:#bdc3c7; font-size:0.8rem;">Système de Gestion des Agents</p>
                 <input type="text" id="loginUsername" placeholder="Nom d'utilisateur" style="width:100%; padding:12px; margin:10px 0; border-radius:5px; border:none; background:#34495e; color:white;">
                 <input type="password" id="loginPassword" placeholder="Mot de passe" style="width:100%; padding:12px; margin:10px 0; border-radius:5px; border:none; background:#34495e; color:white;">
                 <button class="popup-button green" onclick="doLogin()" style="width:100%;">Se connecter</button>
-                <p style="margin-top:15px; font-size:0.7rem; color:#bdc3c7;">Demo: admin/NABIL1974 | cp_a/CPA123 | agent_a001/AGENT123</p>
             </div>
         </div>
     `;
@@ -1881,47 +1884,126 @@ function addNotification(type, details) {
 function showNotificationToast(type, details) {
     let message = '';
     switch(type) {
-        case 'shift_modification': message = `✏️ Shift modifié pour ${details.agentName} le ${details.date}`; break;
-        case 'leave_add': message = `🏖️ Congé ajouté pour ${details.agentName}`; break;
-        case 'leave_delete': message = `🗑️ Congé supprimé pour ${details.agentName}`; break;
-        case 'shift_exchange': message = `🔄 Échange de shifts entre ${details.agent1Name} et ${details.agent2Name}`; break;
-        case 'agent_add': message = `➕ Nouvel agent ajouté: ${details.agentName}`; break;
-        case 'agent_update': message = `✏️ Agent modifié: ${details.agentName}`; break;
-        case 'agent_delete': message = `🗑️ Agent supprimé: ${details.agentName}`; break;
-        case 'panic_add': message = `🚨 Code panique ajouté pour ${details.agentName}`; break;
-        case 'uniform_add': message = `👔 Habillement enregistré pour ${details.agentName}`; break;
-        case 'warning_add': message = `⚠️ Avertissement ajouté pour ${details.agentName}`; break;
-        default: message = `🔔 Nouvelle notification`;
+        case 'shift_modification':
+            message = `✏️ Shift modifié : ${details.agentName} le ${details.date} (${details.oldValue} → ${details.newValue})`;
+            break;
+        case 'leave_add':
+            message = `🏖️ Congé ajouté : ${details.agentName} du ${details.startDate} au ${details.endDate}`;
+            break;
+        case 'leave_delete':
+            message = `🗑️ Congé supprimé : ${details.agentName} (${details.startDate} → ${details.endDate})`;
+            break;
+        case 'shift_exchange':
+            message = `🔄 Échange de shifts : ${details.agent1Name} ↔ ${details.agent2Name}`;
+            break;
+        case 'agent_add':
+            message = `➕ Nouvel agent : ${details.agentName}`;
+            break;
+        case 'agent_update':
+            message = `✏️ Agent modifié : ${details.agentName} (${details.field})`;
+            break;
+        case 'agent_delete':
+            message = `🗑️ Agent supprimé : ${details.agentName}`;
+            break;
+        case 'panic_add':
+            message = `🚨 Code panique ${details.code} attribué à ${details.agentName}`;
+            break;
+        case 'uniform_add':
+            message = `👔 Habillement enregistré pour ${details.agentName} : ${details.articles}`;
+            break;
+        case 'warning_add':
+            message = `⚠️ Avertissement (${details.warningType}) pour ${details.agentName}`;
+            break;
+        default:
+            message = `🔔 Nouvelle notification`;
     }
+    
     const toast = document.createElement('div');
-    toast.style.cssText = `position:fixed; bottom:20px; right:20px; background:#34495e; color:white; padding:12px 20px; border-radius:8px; border-left:4px solid #f39c12; z-index:10000; cursor:pointer;`;
-    toast.innerHTML = `<div><span>🔔</span> ${message}</div>`;
+    toast.style.cssText = `position:fixed; bottom:20px; right:20px; background:#34495e; color:white; padding:10px 16px; border-radius:8px; border-left:4px solid #f39c12; z-index:10000; cursor:pointer; font-size:0.85rem; box-shadow:0 2px 5px rgba(0,0,0,0.3);`;
+    toast.innerHTML = `<span>🔔</span> ${message}`;
     toast.onclick = () => { toast.remove(); showNotificationsPanel(); };
     document.body.appendChild(toast);
-    setTimeout(() => toast.remove(), 5000);
+    setTimeout(() => toast.remove(), 4000);
 }
-
 function showNotificationsPanel() {
     if (!currentUser) return;
-    const unreadCount = notifications.filter(n => !n.readBy.includes(currentUser.username)).length;
+    
+    // Filtrer selon le rôle
+    let filteredNotifs = notifications.slice();
+    if (currentUser.role === 'AGENT') {
+        const myCode = currentUser.agentCode;
+        filteredNotifs = notifications.filter(n => {
+            const d = n.details;
+            // Vérifier tous les champs possibles contenant un code agent
+            return d.agentCode === myCode || 
+                   d.agent1Code === myCode || 
+                   d.agent2Code === myCode ||
+                   d.agentCode === myCode;
+        });
+    }
+    
+    const unreadCount = filteredNotifs.filter(n => !n.readBy.includes(currentUser.username)).length;
+    
     const panel = document.createElement('div');
+    panel.id = 'notificationsPanel';
     panel.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); display:flex; justify-content:center; align-items:center; z-index:10001;';
+    
     let html = `<div style="background:#2c3e50; border-radius:10px; width:500px; max-width:90%; max-height:80vh; overflow:hidden; display:flex; flex-direction:column;">
-        <div style="padding:15px; border-bottom:1px solid #34495e; display:flex; justify-content:space-between;">
-            <h3>🔔 Notifications</h3><div><span style="background:#e74c3c; padding:4px 10px; border-radius:20px;">${unreadCount} non lue(s)</span>
-            <button id="closeNotifPanel" style="background:#7f8c8d; border:none; padding:5px 12px; border-radius:5px; color:white;">✖️ Fermer</button></div>
+        <div style="padding:15px; border-bottom:1px solid #34495e; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap;">
+            <h3 style="margin:0;">🔔 Notifications</h3>
+            <div style="display:flex; gap:8px;">
+                <span style="background:#e74c3c; padding:4px 10px; border-radius:20px;">${unreadCount} non lue(s)</span>
+                <button id="clearAllNotif" style="background:#e74c3c; border:none; padding:5px 12px; border-radius:5px; color:white; cursor:pointer;">🗑️ Tout supprimer</button>
+                <button id="closeNotifPanel" style="background:#7f8c8d; border:none; padding:5px 12px; border-radius:5px; color:white; cursor:pointer;">✖️ Fermer</button>
+            </div>
         </div>
         <div style="overflow-y:auto; padding:15px;">`;
-    if (notifications.length === 0) {
+    
+    if (filteredNotifs.length === 0) {
         html += '<div style="text-align:center; padding:40px;">📭 Aucune notification</div>';
     } else {
-        notifications.slice().reverse().forEach(n => {
+        filteredNotifs.slice().reverse().forEach(n => {
             const isUnread = !n.readBy.includes(currentUser.username);
             const date = new Date(n.createdAt).toLocaleString();
+            let detailsText = '';
+            switch(n.type) {
+                case 'shift_modification':
+                    detailsText = `✏️ Shift modifié : ${n.details.agentName} le ${n.details.date} (${n.details.oldValue} → ${n.details.newValue})`;
+                    break;
+                case 'leave_add':
+                    detailsText = `🏖️ Congé ajouté : ${n.details.agentName} du ${n.details.startDate} au ${n.details.endDate}`;
+                    break;
+                case 'leave_delete':
+                    detailsText = `🗑️ Congé supprimé : ${n.details.agentName} (${n.details.startDate} → ${n.details.endDate})`;
+                    break;
+                case 'shift_exchange':
+                    detailsText = `🔄 Échange de shifts : ${n.details.agent1Name} ↔ ${n.details.agent2Name}`;
+                    break;
+                case 'agent_add':
+                    detailsText = `➕ Nouvel agent : ${n.details.agentName}`;
+                    break;
+                case 'agent_update':
+                    detailsText = `✏️ Agent modifié : ${n.details.agentName} (${n.details.field})`;
+                    break;
+                case 'agent_delete':
+                    detailsText = `🗑️ Agent supprimé : ${n.details.agentName}`;
+                    break;
+                case 'panic_add':
+                    detailsText = `🚨 Code panique ${n.details.code} attribué à ${n.details.agentName}`;
+                    break;
+                case 'uniform_add':
+                    detailsText = `👔 Habillement enregistré pour ${n.details.agentName} : ${n.details.articles}`;
+                    break;
+                case 'warning_add':
+                    detailsText = `⚠️ Avertissement (${n.details.warningType}) pour ${n.details.agentName}`;
+                    break;
+                default:
+                    detailsText = JSON.stringify(n.details);
+            }
             html += `<div style="background:#34495e; border-radius:8px; padding:12px; margin-bottom:10px; ${isUnread ? 'border-left:3px solid #e74c3c;' : 'border-left:3px solid #2ecc71;'}">
                 <div><strong>${n.type.replace('_', ' ')}</strong> - ${date}</div>
                 <div>Par: ${n.createdByName} (${n.createdByRole})</div>
-                <div>${JSON.stringify(n.details)}</div>`;
+                <div>${detailsText}</div>`;
             if (isUnread) {
                 html += `<button class="mark-read-btn" data-id="${n.id}" style="background:#27ae60; border:none; padding:5px 12px; border-radius:5px; color:white; margin-top:8px;">✓ Marquer lu</button>`;
             } else {
@@ -1933,7 +2015,10 @@ function showNotificationsPanel() {
     html += `</div></div>`;
     panel.innerHTML = html;
     document.body.appendChild(panel);
+    
     document.getElementById('closeNotifPanel').onclick = () => panel.remove();
+    document.getElementById('clearAllNotif').onclick = () => clearAllNotifications(panel);
+    
     document.querySelectorAll('.mark-read-btn').forEach(btn => {
         btn.onclick = () => {
             const id = parseInt(btn.dataset.id);
@@ -1947,6 +2032,17 @@ function showNotificationsPanel() {
             }
         };
     });
+}
+
+function clearAllNotifications(panel = null) {
+    if (!checkPassword("Suppression de toutes les notifications")) return;
+    if (confirm("⚠️ Supprimer définitivement TOUTES les notifications ?\nCette action est irréversible.")) {
+        notifications = [];
+        saveNotifications();
+        updateNotificationBadge();
+        if (panel) panel.remove();
+        showNotificationsPanel(); // rafraîchit l'affichage
+    }
 }
 
 function attachNotificationClick() {
