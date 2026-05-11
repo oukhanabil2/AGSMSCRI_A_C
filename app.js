@@ -2377,39 +2377,43 @@ function afficherSoldesAgent(agentCode, anneeParam = null) {
         if (!solde) continue;
         totalRestes += solde.reste;
         
-        rows += `<tr>
-            <td style="text-align:center;">${annee}</tr>
-            <td style="text-align:center;">${solde.droitAnnuel.toFixed(2)}</th>
-            <td style="text-align:center;">${solde.reportAnt.toFixed(2)}</th>
-            <td style="text-align:center;">${solde.totalDispo.toFixed(2)}</th>
-            <td style="text-align:center;">
+        rows += `<tr style="border-bottom:1px solid #34495e;">
+            <td style="padding:6px; text-align:center;">${annee}</td>
+            <td style="padding:6px; text-align:center;">${solde.droitAnnuel.toFixed(2)}</td>
+            <td style="padding:6px; text-align:center;">${solde.reportAnt.toFixed(2)}</td>
+            <td style="padding:6px; text-align:center;">${solde.totalDispo.toFixed(2)}</td>
+            <td style="padding:6px; text-align:center;">
                 ${isAdmin 
-                    ? `<input type="number" step="0.5" value="${solde.pris}" style="width:80px;" onchange="setPrisManuel('${agentCode}', ${annee}, this.value)">`
+                    ? `<input type="number" step="0.5" value="${solde.pris}" style="width:70px;" onchange="setPrisManuel('${agentCode}', ${annee}, this.value)">`
                     : `<span>${solde.pris}</span>`
                 }
-            </th>
-            <td style="text-align:center; font-weight:bold; ${solde.reste < 0 ? 'color:#e74c3c;' : 'color:#f39c12;'}">${solde.reste.toFixed(2)}</th>
-            <td style="text-align:center;">
+            </td>
+            <td style="padding:6px; text-align:center; font-weight:bold; ${solde.reste < 0 ? 'color:#e74c3c;' : 'color:#f39c12;'}">${solde.reste.toFixed(2)}</td>
+            <td style="padding:6px; text-align:center;">
                 ${isAdmin 
                     ? `<button class="action-btn small blue" onclick="afficherDetailMensuelConges('${agentCode}', ${annee})">📅 Détail</button>`
                     : ''
                 }
-            </th>
+            </td>
         </tr>`;
     }
     
     const html = `<div class="info-section"><h3>📆 Solde des congés - ${agent.nom} ${agent.prenom} (${agent.code})</h3>
-        <div style="overflow-x:auto;"><table class="classement-table"><thead>
-            <tr><th>Année</th><th>Droit annuel</th><th>Report ant.</th><th>Total dispo</th><th>Pris</th><th>Reste</th><th>Actions</th></tr></thead>
-        <tbody>${rows}</tbody>
-        <tfoot>
-            <tr style="background-color:#2c3e50;">
-                <td colspan="6" style="text-align:right; font-weight:bold;">Total des restes :</th>
-                <td style="text-align:center; font-weight:bold; color:#f1c40f;">${totalRestes.toFixed(2)}</th>
-            </tr>
-        </tfoot>
-        </table></div>
-        <button class="popup-button gray" onclick="${retourOnclick}">Retour</button>
+        <div style="overflow-x:auto;">
+            <table class="classement-table" style="width:100%; border-collapse:collapse;">
+                <thead><tr style="background-color:#34495e;">
+                    <th style="padding:6px;">Année</th><th style="padding:6px;">Droit annuel</th><th style="padding:6px;">Report ant.</th><th style="padding:6px;">Total dispo</th><th style="padding:6px;">Pris</th><th style="padding:6px;">Reste</th><th style="padding:6px;">Actions</th>
+                </tr></thead>
+                <tbody>${rows}</tbody>
+                <tfoot>
+                    <tr style="background-color:#2c3e50;">
+                        <td colspan="6" style="text-align:right; font-weight:bold; padding:6px;">Total des restes :</td>
+                        <td style="text-align:center; font-weight:bold; color:#f1c40f; padding:6px;">${totalRestes.toFixed(2)}</td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+        <button class="popup-button gray" onclick="${retourOnclick}" style="margin-top:15px;">Retour</button>
     </div>`;
     document.getElementById('main-content').innerHTML = html;
 }
