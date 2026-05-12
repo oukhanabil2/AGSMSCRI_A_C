@@ -498,31 +498,6 @@ async function saveSharedPanique() {
         console.error("❌ Erreur sauvegarde panique", err);
     }
 }
-async function saveSharedPanique() {
-    if (!APPS_SCRIPT_URL) return;
-    try {
-        const dataToSend = panicCodes.map(p => ({
-            AgentCode: p.agent_code,
-            Code: p.code,
-            Poste: p.poste || '',
-            Commentaire: p.comment || ''
-        }));
-       //   console.log("Envoi Panique:", dataToSend);
-        const response = await fetch(`${APPS_SCRIPT_URL}?tab=Panique&replace=true`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'text/plain' },
-            body: JSON.stringify(dataToSend)
-        });
-        const text = await response.text();
-        if (text !== "OK") throw new Error(`Réponse du serveur: ${text}`);
-        console.log("✅ Codes panique sauvegardés");
-    } catch (err) {
-        console.error("❌ Erreur sauvegarde panique", err);
-        alert("Erreur sauvegarde panique: " + err.message);
-    }
-}
-
-
 
 // ==================== SYNCHRONISATION HABILLEMENT ====================
 async function loadSharedHabillement() {
