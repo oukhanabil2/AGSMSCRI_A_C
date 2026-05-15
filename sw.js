@@ -1,5 +1,5 @@
 // sw.js - Service Worker pour SGA v8.0
-    // FINAL1 //
+
 const CACHE_NAME = 'sga-v8.0';
 const urlsToCache = [
     './',
