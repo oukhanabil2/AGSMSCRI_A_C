@@ -1,5 +1,5 @@
 // ==================== SGA v8.0 - APPLICATION COMPLÈTE ====================
-      //FlNAL11 //
+      //FlNAL1 //
 console.log("🚀 SGA v8.0 - Application chargée");
 
 // ==================== PARTIE 1 : CONSTANTES & CONFIGURATION ====================
@@ -3030,6 +3030,9 @@ function filterAgentsList() {
 
 function showAddAgentForm() {
     const html = `<div class="info-section"><h3>➕ Ajouter un Agent</h3>
+    <div class="form-group"><label>Date naissance</label>
+    <input type="date" id="newDateNaissance" class="form-input">
+</div>
         <div class="form-group"><label>Code *</label><input type="text" id="newCode" class="form-input" placeholder="Ex: A100"></div>
         <div class="form-group"><label>Nom *</label><input type="text" id="newNom" class="form-input"></div>
         <div class="form-group"><label>Prénom *</label><input type="text" id="newPrenom" class="form-input"></div>
@@ -3049,12 +3052,14 @@ function showAddAgentForm() {
 
 async function addNewAgent() {
     const code = document.getElementById('newCode').value.toUpperCase();
+    const date_naissance = document.getElementById('newDateNaissance').value;
     const nom = document.getElementById('newNom').value;
     const prenom = document.getElementById('newPrenom').value;
     const groupe = document.getElementById('newGroupe').value;
     const tel = document.getElementById('newTel').value;
     const matricule = document.getElementById('newMatricule').value;
     const cin = document.getElementById('newCin').value;
+    
     const poste = document.getElementById('newPoste').value;
     let date_entree = document.getElementById('newDateEntree').value;
     const adresse = document.getElementById('newAdresse').value;
@@ -3070,7 +3075,7 @@ async function addNewAgent() {
 
     // Ajout local
     agents.push({ 
-        code, nom, prenom, groupe, tel, matricule, cin, poste, 
+        code, nom, prenom, groupe, tel, matricule, cin, date_naissance, poste, 
         date_entree, adresse, email, 
         statut: 'actif', 
         date_sortie: null,
@@ -3095,6 +3100,9 @@ function showEditAgent(code) {
         <div class="form-group"><label>Prénom</label><input type="text" id="editPrenom" value="${agent.prenom}" class="form-input"></div>
         <div class="form-group"><label>Groupe</label><select id="editGroupe" class="form-input">${['A','B','C','D','E','J'].map(g => `<option value="${g}" ${agent.groupe === g ? 'selected' : ''}>${g}</option>`).join('')}</select></div>
         <div class="form-group"><label>Téléphone</label><input type="text" id="editTel" value="${agent.tel || ''}" class="form-input"></div>
+      <div class="form-group"><label>Date naissance</label>
+    <input type="date" id="editDateNaissance" value="${agent.date_naissance || ''}" class="form-input">
+</div>  
         <div class="form-group"><label>Matricule</label><input type="text" id="editMatricule" value="${agent.matricule || ''}" class="form-input"></div>
         <div class="form-group"><label>CIN</label><input type="text" id="editCin" value="${agent.cin || ''}" class="form-input"></div>
         <div class="form-group"><label>Poste</label><input type="text" id="editPoste" value="${agent.poste || ''}" class="form-input"></div>
@@ -3112,6 +3120,7 @@ async function updateAgent(code) {
     const idx = agents.findIndex(a => a.code === code);
     if (idx !== -1) {
         const oldAgent = { ...agents[idx] };
+        agents[idx].date_naissance = formatDateUTC(document.getElementById('editDateNaissance').value);
         
         agents[idx].nom = document.getElementById('editNom').value;
         agents[idx].prenom = document.getElementById('editPrenom').value;
@@ -3172,6 +3181,8 @@ function showAgentDetails(code) {
         <div class="info-item"><span class="info-label">🆔 CIN:</span> ${a.cin || 'N/A'}</div>
         <div class="info-item"><span class="info-label">💼 Poste:</span> ${a.poste || 'N/A'}</div>
         <div class="info-item"><span class="info-label">📅 Date entrée:</span> ${a.date_entree || 'N/A'}</div>
+
+<div class="info-item"><span class="info-label">🎂 Date naissance :</span> ${a.date_naissance || 'N/A'}</div> 
         <div class="info-item"><span class="info-label">📅 Date sortie:</span> ${a.date_sortie || 'En activité'}</div>
         <div class="info-item"><span class="info-label">⚡ Statut:</span> ${a.statut === 'actif' ? '🟢 Actif' : '🔴 Inactif'}</div>
         <button class="popup-button gray" onclick="showAgentsList()">Retour</button>
