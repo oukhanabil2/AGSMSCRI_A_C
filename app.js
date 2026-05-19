@@ -679,7 +679,6 @@ async function saveSharedHolidays() {
     }
     if (!navigator.onLine) {
         addPendingAction({ type: 'save_holidays', data: JSON.parse(JSON.stringify(holidays)) });
-        showSnackbar("📡 Hors ligne – jours fériés sauvegardés localement");
         return;
     }
     try {
@@ -697,8 +696,10 @@ async function saveSharedHolidays() {
         const text = await response.text();
         if (text !== "OK") throw new Error(text);
         console.log("✅ Jours fériés sauvegardés");
+        showSnackbar("✅ Jours fériés synchronisés");
     } catch (err) {
         console.error("❌ Erreur sauvegarde jours fériés", err);
+        showSnackbar("❌ Erreur synchronisation jours fériés");
     }
 }
 // ==================== SYNCHRONISATION CONGÉS ====================
@@ -4973,7 +4974,7 @@ function showAddHolidayForm() {
     document.getElementById('main-content').innerHTML = html;
 }
 
-function saveHoliday() {
+async function saveHoliday() {
     if (currentUser && currentUser.role !== 'ADMIN') {
         alert("⚠️ Accès réservé à l'administrateur");
         displayHolidaysMenu();
@@ -4986,8 +4987,18 @@ function saveHoliday() {
     if (!fullDate || !description) { alert("⚠️ Date et description requises!"); return; }
     const monthDay = fullDate.substring(5);
     if (holidays.find(h => h.date === monthDay)) { alert("⚠️ Ce jour férié existe déjà!"); return; }
+    
     holidays.push({ date: monthDay, description, type, isRecurring: true });
     saveData();
+    
+    // Forcer la synchronisation cloud
+    if (navigator.onLine) {
+        await saveSharedHolidays();
+    } else {
+        addPendingAction({ type: 'save_holidays', data: JSON.parse(JSON.stringify(holidays)) });
+        showSnackbar("📡 Hors ligne – jour férié ajouté, synchronisation ultérieure");
+    }
+    
     alert(`✅ Jour férié ajouté: ${description} (${fullDate})`);
     showHolidaysList();
 }
