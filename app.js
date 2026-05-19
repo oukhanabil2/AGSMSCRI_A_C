@@ -44,6 +44,11 @@ async function flushPendingActions() {
             } else if (action.type === 'save_agents') {
                 agents = action.data;
                 await saveSharedAgents();
+           
+            } else if (action.type === 'save_holidays') {
+    holidays = action.data;
+    await saveSharedHolidays();
+                
             } else if (action.type === 'save_panique') {
                 panicCodes = action.data;
                 await saveSharedPanique();
@@ -639,6 +644,63 @@ async function saveSharedAvertissements() {
         console.error("❌ Erreur sauvegarde avertissements", err);
     }
 }
+
+// ==================== SYNCHRONISATION JOURS FÉRIÉS ====================
+async function loadSharedHolidays() {
+    if (!APPS_SCRIPT_URL) return false;
+    try {
+        const response = await fetch(`${APPS_SCRIPT_URL}?tab=JoursFeries`);
+        if (!response.ok) throw new Error("Erreur réseau");
+        const cloudHolidays = await response.json();
+        if (Array.isArray(cloudHolidays) && cloudHolidays.length > 0) {
+            holidays = cloudHolidays.map(h => ({
+                date: h.Date,
+                description: h.Description,
+                type: h.Type || 'fixe',
+                isRecurring: h.Recurring === true || h.Recurring === 'true'
+            }));
+            localStorage.setItem('sga_holidays', JSON.stringify(holidays));
+            console.log(`✅ Jours fériés chargés (${holidays.length})`);
+        } else {
+            console.log("Aucun jour férié cloud → conservation locale");
+        }
+        return true;
+    } catch (err) {
+        console.error("❌ Erreur chargement jours fériés", err);
+        return false;
+    }
+}
+
+async function saveSharedHolidays() {
+    if (!APPS_SCRIPT_URL) return;
+    if (!currentUser || holidays.length === 0) {
+        console.warn("Sauvegarde jours fériés ignorée");
+        return;
+    }
+    if (!navigator.onLine) {
+        addPendingAction({ type: 'save_holidays', data: JSON.parse(JSON.stringify(holidays)) });
+        showSnackbar("📡 Hors ligne – jours fériés sauvegardés localement");
+        return;
+    }
+    try {
+        const dataToSend = holidays.map(h => ({
+            Date: h.date,
+            Description: h.description,
+            Type: h.type || 'fixe',
+            Recurring: h.isRecurring ? 'true' : 'false'
+        }));
+        const response = await fetch(`${APPS_SCRIPT_URL}?tab=JoursFeries&replace=true`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify(dataToSend)
+        });
+        const text = await response.text();
+        if (text !== "OK") throw new Error(text);
+        console.log("✅ Jours fériés sauvegardés");
+    } catch (err) {
+        console.error("❌ Erreur sauvegarde jours fériés", err);
+    }
+}
 // ==================== SYNCHRONISATION CONGÉS ====================
 async function loadSharedConges() {
     if (!APPS_SCRIPT_URL) return false;
@@ -855,6 +917,7 @@ function saveData() {
      saveSharedUsers();
     saveSharedAvertissements();// doit exister
 saveSharedSoldes();
+saveSharedHolidays();
     console.log("💾 Sauvegarde locale + cloud lancée");
 }
 
@@ -910,6 +973,7 @@ async function loadData() {
         try {
             await loadSharedAvertissements();
         } catch(e) { console.warn("Avertissements cloud:", e); }
+       await loadSharedHolidays(); 
         
         // 3. Affichage du menu seulement après tous les chargements
         if (currentUser) {
@@ -5047,6 +5111,7 @@ function deleteHoliday(dateStr) {
     if (confirm(`Supprimer le jour férié du ${dateStr} ?`)) {
         holidays = holidays.filter(h => h.date !== dateStr);
         saveData();
+        saveSharedHolidays();
         alert("✅ Jour férié supprimé!");
         showHolidaysList();
     }
@@ -5064,6 +5129,7 @@ function modifyHoliday(dateStr) {
     const newType = prompt("Nouveau type (fixe, religieux, national) :", holiday.type || "fixe");
     if (newType && ['fixe', 'religieux', 'national'].includes(newType)) holiday.type = newType;
     saveData();
+    saveSharedHolidays();
     alert("✅ Jour férié modifié");
     showHolidaysList();
 }
