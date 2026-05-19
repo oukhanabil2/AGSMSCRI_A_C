@@ -1,9 +1,9 @@
 // ==================== SGA v8.0 - APPLICATION COMPLÈTE ====================
-      //FlNAL1 pour secours final qui j'ai utilisé actuellement 
+      //FlNAL1 //
 console.log("🚀 SGA v8.0 - Application chargée");
 
 // ==================== PARTIE 1 : CONSTANTES & CONFIGURATION ====================
-const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxwlE0KOxF68qKG7p5EgHAqkKv4z2rpTCubn707iBlN81C70tpKS3XUN_Pp0L6PlpLvKA/exec";
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxD5lnblVjH0RyP01AzrKKsJfLDok6-ZVbUFwpt9diezz2LsgkwzvEU8jzC3XmiNxMNag/exec";
 const SHEET_BEST_BASE_URL = APPS_SCRIPT_URL;
 
 const JOURS_FRANCAIS = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
@@ -679,7 +679,6 @@ async function saveSharedHolidays() {
     }
     if (!navigator.onLine) {
         addPendingAction({ type: 'save_holidays', data: JSON.parse(JSON.stringify(holidays)) });
-        showSnackbar("📡 Hors ligne – jours fériés sauvegardés localement");
         return;
     }
     try {
@@ -697,8 +696,10 @@ async function saveSharedHolidays() {
         const text = await response.text();
         if (text !== "OK") throw new Error(text);
         console.log("✅ Jours fériés sauvegardés");
+        showSnackbar("✅ Jours fériés synchronisés");
     } catch (err) {
         console.error("❌ Erreur sauvegarde jours fériés", err);
+        showSnackbar("❌ Erreur synchronisation jours fériés");
     }
 }
 // ==================== SYNCHRONISATION CONGÉS ====================
@@ -4973,7 +4974,7 @@ function showAddHolidayForm() {
     document.getElementById('main-content').innerHTML = html;
 }
 
-function saveHoliday() {
+async function saveHoliday() {
     if (currentUser && currentUser.role !== 'ADMIN') {
         alert("⚠️ Accès réservé à l'administrateur");
         displayHolidaysMenu();
@@ -4986,8 +4987,18 @@ function saveHoliday() {
     if (!fullDate || !description) { alert("⚠️ Date et description requises!"); return; }
     const monthDay = fullDate.substring(5);
     if (holidays.find(h => h.date === monthDay)) { alert("⚠️ Ce jour férié existe déjà!"); return; }
+    
     holidays.push({ date: monthDay, description, type, isRecurring: true });
     saveData();
+    
+    // Forcer la synchronisation cloud
+    if (navigator.onLine) {
+        await saveSharedHolidays();
+    } else {
+        addPendingAction({ type: 'save_holidays', data: JSON.parse(JSON.stringify(holidays)) });
+        showSnackbar("📡 Hors ligne – jour férié ajouté, synchronisation ultérieure");
+    }
+    
     alert(`✅ Jour férié ajouté: ${description} (${fullDate})`);
     showHolidaysList();
 }
