@@ -5011,23 +5011,58 @@ function showHolidaysList() {
         document.getElementById('main-content').innerHTML = html;
         return;
     }
-    const sortedHolidays = [...holidays].sort((a, b) => { const [mA, dA] = a.date.split('-').map(Number); const [mB, dB] = b.date.split('-').map(Number); if (mA !== mB) return mA - mB; return dA - dB; });
+
+    // 1. Trier les jours fériés par mois puis par jour
+    const sortedHolidays = [...holidays].sort((a, b) => {
+        const [mA, dA] = a.date.split('-').map(Number);
+        const [mB, dB] = b.date.split('-').map(Number);
+        if (mA !== mB) return mA - mB;
+        return dA - dB;
+    });
+
+    // 2. Regrouper par mois
     const holidaysByMonth = {};
-    sortedHolidays.forEach(h => { const [month, day] = h.date.split('-'); const monthName = MOIS_FRANCAIS[parseInt(month) - 1]; if (!holidaysByMonth[monthName]) holidaysByMonth[monthName] = []; holidaysByMonth[monthName].push({ day: parseInt(day), ...h }); });
+    for (const h of sortedHolidays) {
+        const [month, day] = h.date.split('-');
+        const monthName = MOIS_FRANCAIS[parseInt(month) - 1];
+        if (!holidaysByMonth[monthName]) holidaysByMonth[monthName] = [];
+        holidaysByMonth[monthName].push({ day: parseInt(day), ...h });
+    }
+
+    // 3. Générer l'affichage
     const typeLabels = { fixe: '📅 Fixe', religieux: '🕌 Religieux', national: '🇲🇦 National' };
     const typeColors = { fixe: '#27ae60', religieux: '#f39c12', national: '#3498db' };
+
     let html = `<div class="info-section"><h3>📋 Liste des Jours Fériés (${holidays.length} jours)</h3>
-        <div style="display:flex; gap:10px; margin-bottom:15px; flex-wrap:wrap;"><input type="text" id="searchHoliday" placeholder="🔍 Rechercher par description..." style="flex:1; padding:8px;" onkeyup="filterHolidaysList()">
-        <button class="action-btn small green" onclick="showAddHolidayForm()">➕ Ajouter</button>
-        <button class="action-btn small blue" onclick="generateYearlyHolidays()">🔄 Réinitialiser</button></div>
-        <div id="holidaysListContainer"><div style="display:grid; gap:15px;">${Object.entries(holidaysByMonth).map(([monthName, days]) => `
-            <div style="background:#2c3e50; border-radius:8px; overflow:hidden;"><div style="background:#34495e; padding:10px; font-weight:bold; border-bottom:1px solid #f39c12;">📅 ${monthName}</div>
-            <table class="classement-table" style="width:100%; margin:0;"><thead><tr style="background-color:#2c3e50;"><th style="padding:8px; width:80px;">Date</th><th style="padding:8px;">Description</th><th style="padding:8px; width:100px;">Type</th><th style="padding:8px; width:80px;">Actions</th></tr></thead>
-            <tbody>${days.sort((a, b) => a.day - b.day).map(h => `<tr style="border-bottom:1px solid #34495e;"><td style="padding:8px; text-align:center;"><strong>${h.day}</strong></th><td style="padding:8px;">🎉 ${h.description}</th>
-            <td style="padding:8px; text-align:center;"><span style="background:${typeColors[h.type]}; color:white; padding:4px 8px; border-radius:12px;">${typeLabels[h.type]}</span></th>
-            <td style="padding:8px; text-align:center;"><button class="action-btn small orange" onclick="modifyHoliday('${h.date}')">✏️</button><button class="action-btn small red" onclick="deleteHoliday('${h.date}')">🗑️</button></th></tr>`).join('')}</tbody></div>`).join('')}</div></div>
-        <button class="popup-button gray" onclick="displayHolidaysMenu()" style="margin-top:15px;">↩️ Retour</button>
-    </div>`;
+        <div style="display:flex; gap:10px; margin-bottom:15px; flex-wrap:wrap;">
+            <input type="text" id="searchHoliday" placeholder="🔍 Rechercher par description..." style="flex:1; padding:8px; border-radius:5px; border:1px solid #34495e; background:#2c3e50; color:white;" onkeyup="filterHolidaysList()">
+            <button class="action-btn small green" onclick="showAddHolidayForm()">➕ Ajouter</button>
+            <button class="action-btn small blue" onclick="generateYearlyHolidays()">🔄 Réinitialiser</button>
+        </div>
+        <div id="holidaysListContainer">`;
+
+    // Génération par mois
+    for (const [monthName, days] of Object.entries(holidaysByMonth)) {
+        html += `<div style="margin-bottom:20px; background:#2c3e50; border-radius:8px; overflow:hidden;">
+            <div style="background:#34495e; padding:10px; font-weight:bold; border-bottom:1px solid #f39c12;">📅 ${monthName}</div>
+            <table style="width:100%; border-collapse:collapse;">
+                <thead><tr style="background-color:#2c3e50;"><th style="padding:8px; width:80px;">Date</th><th>Description</th><th style="width:100px;">Type</th><th style="width:80px;">Actions</th></tr></thead>
+                <tbody>`;
+        days.sort((a,b) => a.day - b.day).forEach(h => {
+            html += `<tr style="border-bottom:1px solid #34495e;">
+                <td style="padding:8px; text-align:center;"><strong>${h.day}</strong></th>
+                <td style="padding:8px;">🎉 ${h.description}</th>
+                <td style="padding:8px; text-align:center;"><span style="background:${typeColors[h.type]}; color:white; padding:4px 8px; border-radius:12px;">${typeLabels[h.type]}</span></th>
+                <td style="padding:8px; text-align:center;">
+                    <button class="action-btn small orange" onclick="modifyHoliday('${h.date}')">✏️</button>
+                    <button class="action-btn small red" onclick="deleteHoliday('${h.date}')">🗑️</button>
+                </th>
+            </tr>`;
+        });
+        html += `</tbody></table></div>`;
+    }
+
+    html += `</div><button class="popup-button gray" onclick="displayHolidaysMenu()" style="margin-top:15px;">↩️ Retour</button></div>`;
     document.getElementById('main-content').innerHTML = html;
 }
 
