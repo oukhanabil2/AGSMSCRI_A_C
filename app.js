@@ -3,7 +3,7 @@
 console.log("🚀 SGA v8.0 - Application chargée");
 
 // ==================== PARTIE 1 : CONSTANTES & CONFIGURATION ====================
-const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx61iCeQYfX-OWPiesROz2Fw3pSkqX7pKYm8rd3_fItTfzlc9qle8eO0y8On1OBjBZkvQ/exec";
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxD5lnblVjH0RyP01AzrKKsJfLDok6-ZVbUFwpt9diezz2LsgkwzvEU8jzC3XmiNxMNag/exec";
 const SHEET_BEST_BASE_URL = APPS_SCRIPT_URL;
 
 const JOURS_FRANCAIS = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
